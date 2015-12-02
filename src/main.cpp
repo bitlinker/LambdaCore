@@ -1,57 +1,43 @@
 #include <iostream>
-#include <Render.h>
+#include <Render/Init.h> // TODO: internal
+#include <Render/GLContext.h>
 #include <Render/RenderWindow.h>
-#include <Init.h>
 #include <Logger/Log.h>
 
-/*static bool ReadOpponentsTxt(TextReader& reader)
-{
-    uint32_t numOpponents = reader.readUInt32();
-    for (uint32_t i = 0; i < numOpponents; ++i)
-    {
-        OpponentDescription descr;
-        descr.read(reader);
-    }
+#include <BSPMap.h>
 
-    std::string endMarker;
-    reader.readLine(endMarker);
-
-    if (endMarker != "END")
-        return false;
-
-    return true;
-}*/
-
-#include <TextFiles/SoundTxt.h>
-#include <TextFiles/RaceTxt.h>
 #include <fstream>
 #include <iostream>
 
-//blkeagle.txt
+using namespace LambdaCore;
 
 int main(int argc, char **argv)
 {
-	std::string carmaPath;
-	if (argc > 1)
-	{
-		carmaPath = argv[1];
-	}
+    Commons::Render::Init init; // TODO: internal
+    
+    Commons::Render::WindowParams params;
+    params.width = 1024;
+    params.height = 768;
+    params.title = "LambdaCore";
+    
+    Commons::Render::RenderWindow window(params);
+    Commons::Render::GLContext context;
 
-	std::string inFileName = carmaPath + "/DATA/RACES/CITYA1.TXT";
-	std::ifstream iStrm;
-	iStrm.open(inFileName, std::ios_base::in);
-	if (!iStrm.is_open())
-	{
-		std::cout << "Can't open file for reading: " << inFileName << std::endl;
-		return -1;
-	}
-
-	using namespace OpenCarma;
-	TextReader reader(iStrm, TextDecoder::DT_CARMA1);
-
-	//SoundTxt soundTxt(reader);
-	//auto entries = soundTxt.getEntries();
-	RaceTxt file(reader);
+    // TODO: self stream object, exceptions or checks
+    std::ifstream strm_map("f:/Games/Half-Life/valve/maps/gasworks.bsp", std::ifstream::binary);
+    BSPMap map(strm_map);
+    
+    double oldTime = window.getCurTime();
+    while (window.tick())
+    {
+        double curTime = window.getCurTime();
+        float delta = static_cast<float>(curTime - oldTime);
+        oldTime = curTime;
+        
+        //controller.update(delta);
+        //render.render(camera, rootNode, window);
+        window.swapBuffers();
+    }
 
 	return 0;
 }

@@ -3,11 +3,17 @@ project (LambdaCore)
 
 # Sources
 set(BITLINKER_COMMONS_SOURCES
+    #Common
+    BitlinkerCommons/Common/StringUtils.h
+    BitlinkerCommons/Common/StringUtils.cpp
+
     #Logger
     BitlinkerCommons/Logger/Log.h
     BitlinkerCommons/Logger/Log.cpp
     
     #Render
+    BitlinkerCommons/Render/Init.cpp
+    BitlinkerCommons/Render/Init.h
     BitlinkerCommons/Render/BufferObject.h
     BitlinkerCommons/Render/Camera.h
     BitlinkerCommons/Render/Camera.cpp
@@ -32,6 +38,8 @@ set(BITLINKER_COMMONS_SOURCES
 
 set(LAMBDA_CORE_SOURCES
     src/main.cpp
+    src/BSPMap.cpp
+    src/BSPMap.h
 )
 
 
