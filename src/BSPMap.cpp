@@ -7,7 +7,7 @@ using namespace Commons;
 
 namespace LambdaCore
 {  
-    BSPMap::BSPMap(std::ifstream& stream)
+    BSPMap::BSPMap(const Commons::IOStreamPtr stream)
         : mHeader()
         // TODO: init members
     {
@@ -15,19 +15,28 @@ namespace LambdaCore
     }
 
     
-    void BSPMap::initFromStream(std::ifstream& stream)
+    void BSPMap::initFromStream(const Commons::IOStreamPtr stream)
     {
-        stream.read(reinterpret_cast<char*>(&mHeader), sizeof(mHeader));
+        stream->read(&mHeader, sizeof(mHeader));
         checkVersion();
         
         std::vector<uint8_t> entities(getLumpSize(LUMP_ENTITIES));
         readLump(LUMP_ENTITIES, stream, &entities[0], entities.size());
         
+        readEntities(stream);
         readPlanes(stream);
         readTextures(stream);
         readVertices(stream);
-
-        int k = 0;
+        readNodes(stream);
+        readTexInfo(stream);
+        readFaces(stream);
+        readLightmaps(stream);
+        readClipNodes(stream);
+        readLeafs(stream);
+        readMarkSurfaces(stream);
+        readEdges(stream);
+        readSurfEdges(stream);
+        readModels(stream);
     }
 
     void BSPMap::checkVersion()
@@ -39,46 +48,161 @@ namespace LambdaCore
         }
     }
 
-    void BSPMap::readPlanes(std::ifstream& stream)
+    void BSPMap::readEntities(const Commons::IOStreamPtr stream)
     {
-        uint32_t len = getLumpSize(LUMP_PLANES);
-        uint32_t cnt = len / sizeof(BSPPlane);
-        if (len != cnt * sizeof(BSPPlane))
-        {
-            throw SerializationException(StringUtils::FormatString("Wrong Planes array size: %d", len));
-        }
-
-        mPlanes.resize(cnt);
-        readLump(LUMP_PLANES, stream, reinterpret_cast<uint8_t*>(&mPlanes[0]), len);
+        mEntities.resize(getLumpSize(LUMP_ENTITIES));
+        readLump(LUMP_ENTITIES, stream, &mEntities[0], mEntities.size());
     }
 
-    void BSPMap::readTextures(std::ifstream& stream)
+    template<typename T>
+    void BSPMap::readTypedVec(BSPMap::ELumps lump, const Commons::IOStreamPtr stream, std::vector<T>& vec)
+    {
+        uint32_t len = getLumpSize(lump);
+        uint32_t cnt = len / sizeof(T);
+        uint32_t arrayLen = cnt * sizeof(T);
+        if (arrayLen != len)
+        {
+            throw SerializationException(StringUtils::FormatString("Lump length mismatch for lump %d: expected %d, actual %d", lump, arrayLen, len));
+        }
+        vec.resize(len);
+        readLump(lump, stream, &vec[0], len);
+    }
+
+    void BSPMap::readPlanes(const Commons::IOStreamPtr stream)
+    {
+        readTypedVec(LUMP_PLANES, stream, mPlanes);
+    }
+
+    void BSPMap::readTextures(const Commons::IOStreamPtr stream)
+    {
+        ELumps lump = LUMP_TEXTURES;
+        const BSPLump& lmp = mHeader.mLumps[lump];
+        uint32_t lumpOffset = getLumpOffset(lump);
+        stream->seek(lumpOffset, IOStream::ORIGIN_SET);
+        uint32_t numMipTextures = 0;
+        stream->read(&numMipTextures, sizeof(uint32_t));
+        std::vector<int32_t> offsets(numMipTextures);
+        mMipTextures.resize(numMipTextures);
+        if (numMipTextures > 0)
+        {
+            stream->read(&offsets[0], numMipTextures * sizeof(int32_t));
+            for (uint32_t i = 0; i < numMipTextures; ++i)
+            {
+                stream->seek(lumpOffset + offsets[i], IOStream::ORIGIN_SET);
+                stream->read(&mMipTextures[i], sizeof(BSPMipTex));
+            }
+        }
+    }
+
+    void BSPMap::readVertices(const Commons::IOStreamPtr stream)
+    {
+        readTypedVec(LUMP_VERTICES, stream, mVertices);
+    }
+
+    static void DecodePVS(const uint8_t* src, uint8_t* dst, uint32_t numClusters)
+    {
+        const uint8_t* curPos = src;
+        for (uint32_t i = 0; i < numClusters;)
+        {
+            uint8_t curByte = *curPos++;
+            if (curByte == 0)
+            {
+                uint32_t numSkip = *curPos++;
+                for (uint32_t j = 0; j < numSkip; ++j)
+                    *dst++ = 0;
+                i += numSkip;
+            }
+            else
+            {
+                *dst++ = curByte;
+                ++i;
+            }
+        }
+    }
+
+    void BSPMap::readVIS(const Commons::IOStreamPtr stream)
+    {
+        const uint32_t len = getLumpSize(LUMP_VISIBILITY);
+        if (len > 0)
+        {
+            uint32_t numClusters;
+            uint32_t offsets[2]; // TODO: vec
+            std::vector<uint8_t> compressedVIS(len);
+            //readLump(LUMP_VISIBILITY, stream, &compressedVIS[0], len);
+            // TODO: process
+            // TODO: check method:
+            //DecodePVS
+            mDecodedVIS.resize(0);
+        }
+        else
+        {
+            mDecodedVIS.resize(0);
+        }
+    }
+
+    void BSPMap::readNodes(const Commons::IOStreamPtr stream)
+    {
+        readTypedVec(LUMP_NODES, stream, mNodes);
+    }
+
+    void BSPMap::readTexInfo(const Commons::IOStreamPtr stream)
+    {
+        readTypedVec(LUMP_TEXINFO, stream, mTexInfo);
+    }
+
+    void BSPMap::readFaces(const Commons::IOStreamPtr stream)
+    {
+        readTypedVec(LUMP_FACES, stream, mFaces);
+    }
+
+    void BSPMap::readLightmaps(const Commons::IOStreamPtr stream)
     {
         // TODO
     }
 
-    void BSPMap::readVertices(std::ifstream& stream)
+    void BSPMap::readClipNodes(const Commons::IOStreamPtr stream)
     {
-        uint32_t len = getLumpSize(LUMP_VERTICES);
-        uint32_t cnt = len / sizeof(glm::vec3);
-        if (len != cnt * sizeof(glm::vec3))
-        {
-            throw SerializationException(StringUtils::FormatString("Wrong Vertices array size: %d", len));
-        }
-        mVertices.resize(cnt);
-        readLump(LUMP_VERTICES, stream, reinterpret_cast<uint8_t*>(&mVertices[0]), len);
+        readTypedVec(LUMP_CLIPNODES, stream, mClipNodes);
     }
 
-    void BSPMap::readLump(ELumps lump, std::ifstream& stream, uint8_t* data, uint32_t maxLength) const
+    void BSPMap::readLeafs(const Commons::IOStreamPtr stream)
     {
-        const BSPLump& lmp = mHeader.mLumps[lump];
+        readTypedVec(LUMP_LEAVES, stream, mLeafs);
+    }
 
-        uint32_t length = std::min(lmp.mLength, maxLength);
+    void BSPMap::readMarkSurfaces(const Commons::IOStreamPtr stream)
+    {
+        readTypedVec(LUMP_MARKSURFACES, stream, mMarkSurfaces);
+    }
+
+    void BSPMap::readEdges(const Commons::IOStreamPtr stream)
+    {
+        readTypedVec(LUMP_EDGES, stream, mEdges);
+    }
+
+    void BSPMap::readSurfEdges(const Commons::IOStreamPtr stream)
+    {
+        readTypedVec(LUMP_SURFEDGES, stream, mSurfEdges);
+    }
+
+    void BSPMap::readModels(const Commons::IOStreamPtr stream)
+    {
+        readTypedVec(LUMP_MODELS, stream, mModels);
+    }
+
+    void BSPMap::readLump(ELumps lump, const Commons::IOStreamPtr stream, void* data, uint32_t maxLength) const
+    {
+        uint32_t length = std::min(getLumpSize(lump), maxLength);
         if (length > 0)
         {
-            stream.seekg(lmp.mOffset, SEEK_SET);
-            stream.read(reinterpret_cast<char*>(data), length); // TODO: stream
+            stream->seek(getLumpOffset(lump), IOStream::ORIGIN_SET);
+            stream->read(data, length);
         }
+    }
+
+    uint32_t BSPMap::getLumpOffset(ELumps lump) const
+    {
+        return mHeader.mLumps[lump].mOffset;
     }
 
     uint32_t BSPMap::getLumpSize(ELumps lump) const

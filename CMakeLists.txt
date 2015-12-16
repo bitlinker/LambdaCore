@@ -6,6 +6,13 @@ set(BITLINKER_COMMONS_SOURCES
     #Common
     BitlinkerCommons/Common/StringUtils.h
     BitlinkerCommons/Common/StringUtils.cpp
+    
+    #Streams
+    BitlinkerCommons/Streams/IOStream.h
+    BitlinkerCommons/Streams/FileStream.h
+    BitlinkerCommons/Streams/FileStream.cpp
+    BitlinkerCommons/Streams/MemoryStream.h
+    BitlinkerCommons/Streams/MemoryStream.cpp
 
     #Logger
     BitlinkerCommons/Logger/Log.h

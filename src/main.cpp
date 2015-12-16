@@ -6,10 +6,26 @@
 
 #include <BSPMap.h>
 
-#include <fstream>
-#include <iostream>
+#include <Streams/FileStream.h>
+
+#include <Render/BufferObject.h>
+#include <Render/VertexArrayObject.h>
 
 using namespace LambdaCore;
+
+class BSPMapRender : public Commons::Render::RenderNode
+{
+public:
+    BSPMapRender(BSPMap &map)
+    {
+        //Commons::Render::BufferObject buf;
+    }
+protected:
+    virtual void doRender(const glm::mat4& matrix)  // TODO: pass context here?
+    {
+        // TODO: render here
+    };
+};
 
 int main(int argc, char **argv)
 {
@@ -24,8 +40,17 @@ int main(int argc, char **argv)
     Commons::Render::GLContext context;
 
     // TODO: self stream object, exceptions or checks
-    std::ifstream strm_map("f:/Games/Half-Life/valve/maps/gasworks.bsp", std::ifstream::binary);
+    Commons::FileStreamPtr strm_map(new Commons::FileStream("f:/Games/Half-Life/valve/maps/gasworks.bsp", Commons::FileStream::MODE_READ));
     BSPMap map(strm_map);
+
+    Commons::Render::CameraPtr camera(new Commons::Render::Camera());
+    camera->setPerspective(45.F, 4.F / 3.F, 10000.F, 0.1F);
+    camera->setTranslation(glm::vec3(0.F, 0.F, -1.F));
+
+    Commons::Render::RenderNodePtr rootNode(new Commons::Render::RenderNode("root"));
+
+    Commons::Render::RenderNodePtr mapNode(new BSPMapRender(map));
+    rootNode->attachChild(mapNode);
     
     double oldTime = window.getCurTime();
     while (window.tick())
@@ -34,6 +59,9 @@ int main(int argc, char **argv)
         float delta = static_cast<float>(curTime - oldTime);
         oldTime = curTime;
         
+        
+
+        context.render(camera, rootNode, window);
         //controller.update(delta);
         //render.render(camera, rootNode, window);
         window.swapBuffers();
