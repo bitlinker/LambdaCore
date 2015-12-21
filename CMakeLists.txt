@@ -42,11 +42,21 @@ set(BITLINKER_COMMONS_SOURCES
     BitlinkerCommons/Render/RenderNode.cpp
 )
 
-
 set(LAMBDA_CORE_SOURCES
     src/main.cpp
+    src/WAD.cpp
+    src/WAD.h
     src/BSPMap.cpp
     src/BSPMap.h
+    src/BSPRender.cpp
+    src/BSPRender.h
+    src/MipTexLoader.cpp
+    src/MipTexLoader.h
+    
+    src/PlainShaderProgram.cpp
+    src/PlainShaderProgram.h
+    src/FreeFlyCameraController.cpp
+    src/FreeFlyCameraController.h
 )
 
 

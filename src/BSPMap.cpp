@@ -27,6 +27,7 @@ namespace LambdaCore
         readPlanes(stream);
         readTextures(stream);
         readVertices(stream);
+        readVIS(stream);
         readNodes(stream);
         readTexInfo(stream);
         readFaces(stream);
@@ -36,7 +37,7 @@ namespace LambdaCore
         readMarkSurfaces(stream);
         readEdges(stream);
         readSurfEdges(stream);
-        readModels(stream);
+        readModels(stream);        
     }
 
     void BSPMap::checkVersion()
@@ -125,7 +126,10 @@ namespace LambdaCore
         const uint32_t len = getLumpSize(LUMP_VISIBILITY);
         if (len > 0)
         {
+            stream->seek(getLumpOffset(LUMP_VISIBILITY), IOStream::ORIGIN_SET);
+            // TODO: decode lumps
             uint32_t numClusters;
+            //stream->read(&numClusters, sizeof(uint32_t));
             uint32_t offsets[2]; // TODO: vec
             std::vector<uint8_t> compressedVIS(len);
             //readLump(LUMP_VISIBILITY, stream, &compressedVIS[0], len);
@@ -208,5 +212,34 @@ namespace LambdaCore
     uint32_t BSPMap::getLumpSize(ELumps lump) const
     {
         return mHeader.mLumps[lump].mLength;
+    }
+
+    float BSPMap::getPlaneDist(const BSPPlane* plane, const glm::vec3& point) const
+    {        
+        return glm::dot(plane->mNormal, point) - plane->mDist;
+    }
+
+    int32_t BSPMap::getPointLeaf(const glm::vec3& point) const
+    {
+        int32_t headNode = mModels[0].mHeadnodes[0];// TODO: customize, assert
+        const BSPNode* rootNode = &mNodes[headNode]; 
+        const BSPNode* curNode = rootNode;
+        while (true)
+        {
+            const float dist = getPlaneDist(&mPlanes[curNode->mPlaneIndex], point);
+            int32_t nextNode = curNode->mChildren[dist > 0.F ? 0 : 1];
+            if (nextNode < 0) 
+            {
+                return -nextNode - 1; // Found!                
+            }
+            curNode = &mNodes[nextNode];
+        }
+
+        return 0; 
+    }
+
+    bool BSPMap::isLeafVisible(int32_t fromLeafIndex, int32_t testLeafIndex) const
+    {
+        return true; // TODO: vis test
     }
 }

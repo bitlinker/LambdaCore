@@ -4,7 +4,12 @@
 #include <Render/RenderWindow.h>
 #include <Logger/Log.h>
 
-#include <BSPMap.h>
+
+#include <WAD.h>
+#include <BSPRender.h>
+#include <MipTexLoader.h>
+#include <FreeFlyCameraController.h>
+
 
 #include <Streams/FileStream.h>
 
@@ -40,17 +45,38 @@ int main(int argc, char **argv)
     Commons::Render::GLContext context;
 
     // TODO: self stream object, exceptions or checks
-    Commons::FileStreamPtr strm_map(new Commons::FileStream("f:/Games/Half-Life/valve/maps/gasworks.bsp", Commons::FileStream::MODE_READ));
-    BSPMap map(strm_map);
+    Commons::FileStreamPtr strm_map(new Commons::FileStream("f:/Games/Half-Life/valve/maps/crossfire.bsp", Commons::FileStream::MODE_READ));
+    BSPMapPtr map = std::make_shared<BSPMap>(strm_map);
 
     Commons::Render::CameraPtr camera(new Commons::Render::Camera());
     camera->setPerspective(45.F, 4.F / 3.F, 10000.F, 0.1F);
-    camera->setTranslation(glm::vec3(0.F, 0.F, -1.F));
+    camera->setTranslation(glm::vec3(-10.0F, -10.0F, -10.0F));
+    FreeFlyCameraController camController(camera);
 
+
+    Commons::FileStreamPtr strm_mainwad(new Commons::FileStream("f:/Games/Half-Life/valve/halflife.wad", Commons::FileStream::MODE_READ));
+    WAD mainwad(strm_mainwad);
+
+    Commons::IOStreamPtr textureStream = mainwad.getEntryStream("+0button1");
+    MipTexLoader texLoader;
+
+    Commons::Render::TexturePtr tex(new Commons::Render::Texture());
+    texLoader.loadTexture(textureStream, tex);
+    
+    
     Commons::Render::RenderNodePtr rootNode(new Commons::Render::RenderNode("root"));
 
-    Commons::Render::RenderNodePtr mapNode(new BSPMapRender(map));
-    rootNode->attachChild(mapNode);
+    BSPRender mapRender(map);
+    //Commons::Render::RenderNodePtr mapNode(new BSPMapRender(map));
+    //rootNode->attachChild(mapNode);
+
+    // TODO: dbg
+    //::glEnable(GL_ALPHA_TEST);
+    //::glAlphaFunc(GL_GREATER, 0.5F);
+
+    ::glEnable(GL_DEPTH_TEST);
+    ::glDisable(GL_CULL_FACE);
+
     
     double oldTime = window.getCurTime();
     while (window.tick())
@@ -59,11 +85,11 @@ int main(int argc, char **argv)
         float delta = static_cast<float>(curTime - oldTime);
         oldTime = curTime;
         
-        
-
+        tex->bind(); // TODO: dbg
         context.render(camera, rootNode, window);
-        //controller.update(delta);
-        //render.render(camera, rootNode, window);
+        camController.update(delta);
+        mapRender.render(camera);
+
         window.swapBuffers();
     }
 

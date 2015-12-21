@@ -8,7 +8,8 @@ namespace LambdaCore
 {
     class BSPMap
     {
-    private:
+        friend class BSPRender;
+    public:
         static const uint32_t HL_BSP_VERSION = 30;
         static const uint32_t HL_MAXTEXTURENAME = 16;
         static const uint32_t HL_MIPLEVELS = 4;
@@ -150,8 +151,12 @@ namespace LambdaCore
 
     public:
         BSPMap(const Commons::IOStreamPtr stream);
+        
+        int32_t getPointLeaf(const glm::vec3& point) const;
 
-
+        // Collision detection
+        float getPlaneDist(const BSPPlane* plane, const glm::vec3& point) const;
+        bool isLeafVisible(int32_t fromLeafIndex, int32_t testLeafIndex) const;
 
     private:
         // TODO: stream reader?
@@ -199,4 +204,6 @@ namespace LambdaCore
         std::vector<int32_t> mSurfEdges;
         std::vector<BSPModel> mModels;
     };
+
+    typedef std::shared_ptr<BSPMap> BSPMapPtr;
 }
