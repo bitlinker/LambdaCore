@@ -1,3 +1,4 @@
+#include <cassert>
 #include <BSPRender.h>
 #include <Exception/Exception.h>
 #include <Common/StringUtils.h>
@@ -14,26 +15,15 @@ using namespace Commons::Render;
 
 namespace LambdaCore
 {  
-    // TODO: move
-    class TextureManager : public Commons::Singleton<TextureManager>
-    {
-    public:
-        TexturePtr loadTexture(const std::string& name)
-        {
-            TexturePtr tex = std::make_shared<Texture>(); // TODO: create in context
-            ScopeBind texBind(*tex.get());
-            tex->setMagFilter(GL_LINEAR);
-            tex->setMinFilter(GL_LINEAR);
-            uint8_t data[256 * 256 * 3];
-            tex->setTexData2d(0, GL_RGB, 256, 256, GL_RGB, GL_UNSIGNED_BYTE, data);
-            return tex;
-        }
-    private:
-    };
+    // TODO: animation - in render
+    /*if it begins by * it will be animated like lava or water.
+    if it begins by + then it will be animated with frames, and the second letter of the name will be the frame number.Those numbers begin at 0, and go up to 9 at the maximum.
+    if if begins with sky if will double scroll like a sky.
+    Beware that sky textures are made of two distinct parts.*/
 
-
-    BSPRender::BSPRender(const BSPMapPtr& map)
+    BSPRender::BSPRender(const BSPMapPtr& map, const Commons::Render::SharedTextureMgrPtr& textureManager)
         : m_map(map)
+        , mTexMgr(textureManager)
         , mVao()
         , mVertexes(GL_ARRAY_BUFFER)
         , mVisFaces(map->mFaces.size())
@@ -46,9 +36,8 @@ namespace LambdaCore
         auto itEnd = map->mMipTextures.end();
         for (; it != itEnd; ++it)
         {
-            // TODO: load them
-            //auto tex = TextureManager::getInstance().loadTexture(it->mName);
-            //mTextures.push_back(tex);
+            SharedTexturePtr tex = mTexMgr->getTexture(it->mName);
+            mTextures.push_back(tex);
         }
     }
 
@@ -59,6 +48,8 @@ namespace LambdaCore
 
         // TODO: not clear, optimize
         mVertexData.clear();
+        // TODO: pool
+        mFaceBatches.clear();
 
         // Check for visible leafs        
         int32_t camLeaf = m_map->getPointLeaf(camera->getTranslation());
@@ -77,40 +68,79 @@ namespace LambdaCore
         
         // Render the results
         {
-            ScopeBind bindVertexes(mVertexes);
+            // TODO: load all vertexes in buffer statically
+            ScopeBind bindVertexes(mVertexes); // TODO: static
             mVertexes.setData(sizeof(VertexData) * mVertexData.size(), &mVertexData[0], GL_DYNAMIC_DRAW);
-        }
-
-
-
-        {
-            mShader.use();
-            glm::mat4 camMatrix = camera->getProjection() * camera->getModelview();
-            mShader.setMVP(camMatrix);
-            // TODO
-            //mTextures[0]->bind();
-            mShader.setTex1Sampler(0);            
 
             ScopeBind bind(mVao);
 
-            glEnableVertexAttribArray(0); // Vertexes
-            glEnableVertexAttribArray(1); // Normals
-            glEnableVertexAttribArray(2); // UVs            
+            mShader.use(); // TODO: bind?
+
+            uint32_t vertexAttributeLocation = mShader.getVertexPositionLocation();
+
+            // TODO: disable wrapper?
+            glEnableVertexAttribArray(vertexAttributeLocation); // Vertexes
             mVertexes.bind();
-            
-            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(VertexData), NULL);
-            glVertexAttribPointer(1, 3, GL_FLOAT, GL_TRUE, sizeof(VertexData), (void*)(NULL + sizeof(glm::vec3))); // TODO: better                     
-            glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(VertexData), (void*)(NULL + 2 * sizeof(glm::vec3))); // TODO: better
 
-            //glDrawArrays(GL_LINES, 0, mVertexData.size()); // TODO: check
-            glDrawArrays(GL_TRIANGLE_STRIP, 0, mVertexData.size()); // TODO: check
+            glVertexAttribPointer(vertexAttributeLocation, 3, GL_FLOAT, GL_FALSE, sizeof(VertexData), NULL);
+
+
+            glm::mat4 camMatrix = camera->getProjection() * camera->getModelview();
+            glm::mat4 STATIC_MAP_TRANSFORM = glm::rotate(90.F, -1.F, 0.F, 0.F);
+
+            // TODO: models transformations
+            mShader.setMVP(camMatrix * STATIC_MAP_TRANSFORM);
+            mShader.setTex1Sampler(0);
+
+            auto it = mFaceBatches.begin();
+            const auto itEnd = mFaceBatches.end();
+            while (it != itEnd)
+            {
+                // TODO: funcs
+                // Configure lighting:
+                const BSPMap::BSPPlane& plane = m_map->mPlanes[it->mFace->mPlane];
+                glm::vec3 normal = it->mFace->mPlaneSide == 0 ? plane.mNormal : -plane.mNormal;
+                mShader.setNormal(normal);
+
+                //face.mTypelight // TODO: lighting types
+                float lightness = it->mFace->mBaselight / 255.F;
+                mShader.setLightness(lightness);
+                
+                // Configure texture mapping
+                const BSPMap::BSPTextureInfo& texInfo = m_map->mTexInfo[it->mFace->mTextureInfo];
+                const BSPMap::BSPMipTex& tex = m_map->mMipTextures[texInfo.mMiptex];
+                
+                // TODO: bind wrapper to minimize overhead
+                ScopeBind texBind(*mTextures[texInfo.mMiptex]->get().get()); 
+
+                // TODO: pack this in single matrix?
+                mShader.setTextureMapping(
+                    texInfo.mS,
+                    texInfo.mT,
+                    glm::vec2(texInfo.mSShift, texInfo.mTShift),
+                    glm::vec2(tex.mWidth, tex.mHeight)
+                );
+
+                // configure lightmap:
+                // TODO
+                // 1. Precalc extents for every face
+                // 2. Preload lightmap textures with size according to extents (combine in atlas for performance?)
+                
+                glDrawArrays(GL_TRIANGLE_FAN, it->mStartVertex, it->mNumVertexes); // TODO: check
+
+                ++it;
+            }
         }
-
     }
 
     void BSPRender::drawLeaf(const BSPMap::BSPLeaf& leaf)
-    {
-        //leaf.mContents; // TODO: check if transparent?
+    {     
+        if (leaf.mContents == BSPMap::CONTENTS_CLIP)
+            return;
+        if (leaf.mContents == BSPMap::CONTENTS_SKY)
+            return;
+        //leaf.mContents; // TODO: check for other content
+
         for (uint16_t i = 0; i < leaf.mNumMarkSurfaces; ++i)
         {
             uint16_t faceIndex = m_map->mMarkSurfaces[leaf.mFirstMarkSurface + i];
@@ -123,49 +153,76 @@ namespace LambdaCore
         }
     }
 
-    void BSPRender::CalcUV(const BSPMap::BSPTextureInfo& texInfo, VertexData& data)
+    void BSPRender::CalcUV(const BSPMap::BSPTextureInfo& texInfo, VertexData& data, uint32_t width, uint32_t height)
     {
-        data.mUV.x = glm::dot(texInfo.mS, data.mPos) + texInfo.mSShift;
-        data.mUV.y = glm::dot(texInfo.mT, data.mPos) + texInfo.mTShift;
+        //data.mUV.x = (glm::dot(texInfo.mS, data.mPos) + texInfo.mSShift) / width;
+        //data.mUV.y = (glm::dot(texInfo.mT, data.mPos) + texInfo.mTShift) / height;
     }
 
     void BSPRender::drawFace(const BSPMap::BSPFace& face)
     {
-        const BSPMap::BSPPlane& plane = m_map->mPlanes[face.mPlane];
+        FaceBatch batch;
+
+
         const BSPMap::BSPTextureInfo& texInfo = m_map->mTexInfo[face.mTextureInfo];
 
         // TODO: calc UV in shader?
         // TODO: set texture and lightmap        
-        face.mLightmapOffset;
-        m_map->mMipTextures[texInfo.mMiptex];        
+        //face.mLightmapOffset;
+        const BSPMap::BSPMipTex& tex = m_map->mMipTextures[texInfo.mMiptex];
+        batch.mFace = &face;
+        batch.mStartVertex = mVertexData.size();
+        // HACK: quick fix
+        if (strncmp(tex.mName, "sky", 3) == 0)
+        {
+            return;
+        }
 
         VertexData vertexData;
-        vertexData.mNormal = face.mPlaneSide == 0 ? plane.mNormal : -plane.mNormal;
+        
+
+        uint16_t startVert = -1;
+        uint16_t lastVert = -1;
         for (int16_t i = 0; i < face.mNumEdges; ++i)
         {
-            int32_t edgeIndex = m_map->mSurfEdges[face.mFirstEdge + i]; // TODO: invert support
+            uint16_t edgeVerts[2];
+            int32_t edgeIndex = m_map->mSurfEdges[face.mFirstEdge + i];
             if (edgeIndex > 0)
             {
-                const BSPMap::BSPEdge& edge = m_map->mEdges[edgeIndex]; // TODO: optimize, copypaste
-                vertexData.mPos = m_map->mVertices[edge.mVertex[0]];
-                CalcUV(texInfo, vertexData);
-                mVertexData.push_back(vertexData);
-
-                vertexData.mPos = m_map->mVertices[edge.mVertex[1]];
-                CalcUV(texInfo, vertexData);
-                mVertexData.push_back(vertexData);
+                const BSPMap::BSPEdge& edge = m_map->mEdges[edgeIndex];
+                edgeVerts[0] = edge.mVertex[0];
+                edgeVerts[1] = edge.mVertex[1];
             }
             else
             {
-                const BSPMap::BSPEdge& edge = m_map->mEdges[-edgeIndex - 1]; // TODO: check -1
-                vertexData.mPos = m_map->mVertices[edge.mVertex[1]];
-                CalcUV(texInfo, vertexData);
-                mVertexData.push_back(vertexData);
-
-                vertexData.mPos = m_map->mVertices[edge.mVertex[0]];
-                CalcUV(texInfo, vertexData);
-                mVertexData.push_back(vertexData);
+                const BSPMap::BSPEdge& edge = m_map->mEdges[-edgeIndex];
+                edgeVerts[0] = edge.mVertex[1];
+                edgeVerts[1] = edge.mVertex[0];
             }
+
+            if (i == 0) // First edge, start triangle
+            {
+                vertexData.mPos = m_map->mVertices[edgeVerts[0]];
+                //CalcUV(texInfo, vertexData, tex.mWidth, tex.mHeight);
+                mVertexData.push_back(vertexData);
+                startVert = edgeVerts[0];
+            }
+            else
+            {
+                assert(edgeVerts[0] == lastVert);
+            }
+
+            vertexData.mPos = m_map->mVertices[edgeVerts[1]];
+            //CalcUV(texInfo, vertexData, tex.mWidth, tex.mHeight);
+            mVertexData.push_back(vertexData);
+
+            lastVert = edgeVerts[1];
         }
+
+        assert(lastVert == startVert);
+        // TODO: close poly if needed
+
+        batch.mNumVertexes = mVertexData.size() - batch.mStartVertex;
+        mFaceBatches.push_back(batch);
     }
 }

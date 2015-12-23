@@ -19,25 +19,29 @@ namespace LambdaCore
         uint32_t mOffsets[HL_MIPLEVELS];
     };
 
-    void MipTexLoader::loadTexture(const Commons::IOStreamPtr& stream, Commons::Render::TexturePtr texture)
+    MipTexLoader::MipTexLoader(const WADPtr& wad)
+        : mWad(wad)
     {
-        Commons::MemoryStreamPtr memoryStream = std::dynamic_pointer_cast<Commons::MemoryStream>(stream);
-        if (!memoryStream)
-        {
-            uint32_t size = stream->size();
-            memoryStream.reset(new MemoryStream(size));
-            stream->read(memoryStream->getPtr(), size);
-        }
-        loadTexture(memoryStream, texture);
+    }
+
+    MipTexLoader::~MipTexLoader()
+    {
     }
 
     // TODO: pass gl context, create texture there
-    void MipTexLoader::loadTexture(const Commons::MemoryStreamPtr& stream, Commons::Render::TexturePtr texture)
+    void MipTexLoader::deserializeTexture(const Commons::MemoryStreamPtr& stream, bool isTransparent, Commons::Render::TexturePtr texture)
     {
         ScopeBind texBind(*texture);
         texture->setMagFilter(GL_LINEAR);
         texture->setMinFilter(GL_LINEAR_MIPMAP_LINEAR);
-        // TODO: set clamping???
+
+        // TODO: set clamping???        
+        glTexParameteri(GL_TEXTURE_2D,
+            GL_TEXTURE_WRAP_S,
+            GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D,
+            GL_TEXTURE_WRAP_T,
+            GL_REPEAT);
 
         MipTex header;
         stream->read(&header, sizeof(MipTex));
@@ -66,8 +70,15 @@ namespace LambdaCore
         }
 
         // Palette, RGB. Transparent color is 0? TODO: check
+        uint16_t u1 = 0;
+        stream->read(&u1, sizeof(uint16_t)); // Always 1. Flags?
+        
         const uint8_t *palPtr = static_cast<const uint8_t*>(stream->getCurConstPtr());
         
+        // TODO: no alpha if texture have no transparent pixels
+        // TODO: transparent textures starts with '{'
+        //if (isTransparent)
+
         // Upload texture data
         std::vector<uint8_t> levelData(header.mWidth * header.mHeight * 4);
         for (int mipLevel = 0; mipLevel < 4; ++mipLevel)
@@ -76,14 +87,41 @@ namespace LambdaCore
             for (uint32_t i = 0; i < level.width * level.height; ++i)
             {
                 const uint8_t src = level.pOrigData[i];
-                levelData[4 * i + 0] = palPtr[3 * src + 2];     // R
+                levelData[4 * i + 0] = palPtr[3 * src + 0];     // R 
                 levelData[4 * i + 1] = palPtr[3 * src + 1];     // G
-                levelData[4 * i + 2] = palPtr[3 * src + 0];     // B
-                levelData[4 * i + 3] = src == 0 ? 0 : 255;      // A
+                levelData[4 * i + 2] = palPtr[3 * src + 2];     // B
+
+                // TODO: optimize. They are fucking insane. Why blue is transparent color key?
+                //if (palPtr[3 * src + 2] == 255 && palPtr[3 * src + 1] == 0 && palPtr[3 * src + 0] == 0)
+                if (isTransparent && src == 255)
+                {
+                    // TODO: set color to nearest pixels
+                    levelData[4 * i + 0] = 0;
+                    levelData[4 * i + 1] = 0;
+                    levelData[4 * i + 2] = 0;
+                    levelData[4 * i + 3] = 0;
+                }
+                else
+                {
+                    levelData[4 * i + 3] = 255;
+                }
             }
             texture->setTexData2d(mipLevel, GL_RGBA, level.width, level.height, GL_RGBA, GL_UNSIGNED_BYTE, &levelData[0]);
         }
         // TODO: more mip levels if need?     
+    }
+
+    bool MipTexLoader::loadTexture(const std::string& name, const void* extra, const Commons::Render::TexturePtr& texture)
+    {
+        MemoryStreamPtr stream = mWad->getEntryStream(name);
+        if (stream)
+        {
+            bool isTransparent = (name[0] == '{');
+            // TODO: catch exceptions in case of errors
+            deserializeTexture(stream, isTransparent, texture);
+            return true;
+        }
+        return false;
     }
 }
 

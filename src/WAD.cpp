@@ -62,7 +62,7 @@ namespace LambdaCore
         return -1;
     }
 
-    Commons::IOStreamPtr WAD::getEntryStream(const std::string& name)
+    Commons::MemoryStreamPtr WAD::getEntryStream(const std::string& name)
     {
         int32_t id = getEntryIndexByName(name);
         if (id >= 0)
@@ -72,7 +72,7 @@ namespace LambdaCore
         return nullptr;
     }
 
-    Commons::IOStreamPtr WAD::getEntryStream(uint32_t index)
+    Commons::MemoryStreamPtr WAD::getEntryStream(uint32_t index)
     {
         assert(index < mEntries.size());
         const Entry& entry = mEntries[index];

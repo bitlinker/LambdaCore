@@ -3,6 +3,7 @@
 #include <vector>
 #include <map>
 #include <Streams/IOStream.h>
+#include <Streams/MemoryStream.h>
 
 namespace LambdaCore
 {
@@ -34,8 +35,8 @@ namespace LambdaCore
 
         uint32_t getNumEntries() const;
         std::string getEntryName(uint32_t index) const;
-        Commons::IOStreamPtr getEntryStream(const std::string& name);
-        Commons::IOStreamPtr getEntryStream(uint32_t index);
+        Commons::MemoryStreamPtr getEntryStream(const std::string& name);
+        Commons::MemoryStreamPtr getEntryStream(uint32_t index);
         int32_t getEntryIndexByName(const std::string& name) const;
 
     private:

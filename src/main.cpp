@@ -2,6 +2,7 @@
 #include <Render/Init.h> // TODO: internal
 #include <Render/GLContext.h>
 #include <Render/RenderWindow.h>
+#include <Render/SharedTextureMgr.h>
 #include <Logger/Log.h>
 
 
@@ -9,7 +10,6 @@
 #include <BSPRender.h>
 #include <MipTexLoader.h>
 #include <FreeFlyCameraController.h>
-
 
 #include <Streams/FileStream.h>
 
@@ -36,9 +36,17 @@ int main(int argc, char **argv)
 {
     Commons::Render::Init init; // TODO: internal
     
-    Commons::Render::WindowParams params;
+    /*Commons::Render::WindowParams params;
     params.width = 1024;
-    params.height = 768;
+    params.height = 600;
+    params.isFullscreen = false;
+    params.title = "LambdaCore";*/
+
+    Commons::Render::WindowParams params;
+    params.width = 1920;
+    params.height = 1080;
+    params.fsaaSamples = 8;
+    params.isFullscreen = true;
     params.title = "LambdaCore";
     
     Commons::Render::RenderWindow window(params);
@@ -49,33 +57,38 @@ int main(int argc, char **argv)
     BSPMapPtr map = std::make_shared<BSPMap>(strm_map);
 
     Commons::Render::CameraPtr camera(new Commons::Render::Camera());
-    camera->setPerspective(45.F, 4.F / 3.F, 10000.F, 0.1F);
-    camera->setTranslation(glm::vec3(-10.0F, -10.0F, -10.0F));
+    camera->setPerspective(45.F, 16.F / 9.F, 10000.F, 0.1F);
+    //camera->setTranslation(glm::vec3(-10.0F, -10.0F, -10.0F));
     FreeFlyCameraController camController(camera);
 
-
     Commons::FileStreamPtr strm_mainwad(new Commons::FileStream("f:/Games/Half-Life/valve/halflife.wad", Commons::FileStream::MODE_READ));
-    WAD mainwad(strm_mainwad);
+    WADPtr mainWad(new WAD(strm_mainwad));
+    MipTexLoaderPtr wadTexLoader (new MipTexLoader(mainWad));
+    Commons::Render::SharedTextureMgrPtr textureMgr(new Commons::Render::SharedTextureMgr());
+    textureMgr->addLoader(wadTexLoader);
 
-    Commons::IOStreamPtr textureStream = mainwad.getEntryStream("+0button1");
-    MipTexLoader texLoader;
+    //Commons::Render::SharedTexturePtr tex = textureMgr->getTexture("+0button1");
 
-    Commons::Render::TexturePtr tex(new Commons::Render::Texture());
-    texLoader.loadTexture(textureStream, tex);
+    //Commons::Render::TexturePtr tex(new Commons::Render::Texture());
+    //texLoader.loadTexture(textureStream, tex);
     
     
     Commons::Render::RenderNodePtr rootNode(new Commons::Render::RenderNode("root"));
 
-    BSPRender mapRender(map);
+    BSPRender mapRender(map, textureMgr);
     //Commons::Render::RenderNodePtr mapNode(new BSPMapRender(map));
     //rootNode->attachChild(mapNode);
 
     // TODO: dbg
+    ::glEnable(GL_BLEND);
+    ::glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
     //::glEnable(GL_ALPHA_TEST);
     //::glAlphaFunc(GL_GREATER, 0.5F);
 
     ::glEnable(GL_DEPTH_TEST);
-    ::glDisable(GL_CULL_FACE);
+    ::glEnable(GL_CULL_FACE);
+    ::glFrontFace(GL_CW); // TODO: invert faces then building model?
 
     
     double oldTime = window.getCurTime();
@@ -85,7 +98,7 @@ int main(int argc, char **argv)
         float delta = static_cast<float>(curTime - oldTime);
         oldTime = curTime;
         
-        tex->bind(); // TODO: dbg
+        //tex->get()->bind(); // TODO: dbg
         context.render(camera, rootNode, window);
         camController.update(delta);
         mapRender.render(camera);

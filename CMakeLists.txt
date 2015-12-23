@@ -35,6 +35,9 @@ set(BITLINKER_COMMONS_SOURCES
     BitlinkerCommons/Render/ShaderProgram.cpp
     BitlinkerCommons/Render/Texture.h
     BitlinkerCommons/Render/Texture.cpp
+    BitlinkerCommons/Render/ITextureLoader.h
+    BitlinkerCommons/Render/SharedTextureMgr.h
+    BitlinkerCommons/Render/SharedTextureMgr.cpp
     BitlinkerCommons/Render/VertexArrayObject.h
     BitlinkerCommons/Render/RenderWindow.h
     BitlinkerCommons/Render/RenderWindow.cpp

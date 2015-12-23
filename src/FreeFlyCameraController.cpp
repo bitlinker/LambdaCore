@@ -7,7 +7,7 @@ namespace LambdaCore
 {    
     static bool CheckKey(int key)
     {
-        return ::GetAsyncKeyState(key) & 0x8000 > 0;
+        return (::GetAsyncKeyState(key) & 0x8000) > 0;
     }
 
     static glm::vec2 GetMousePos()
@@ -24,40 +24,43 @@ namespace LambdaCore
 
     void FreeFlyCameraController::update(float delta)
     {
-        static const float SPEED = 200.F;
-        static const float ANG_SPEED = 0.5F;
+        static const float SPEED = 600.F;
+        static const float ANG_SPEED = 1.5F;
 
         // Translation:
-        glm::vec3 direction;
+        glm::vec4 direction;
 
         if (CheckKey('W'))
         {
-            direction += glm::vec3(0.F, 0.F, -1.F);
+            direction += glm::vec4(0.F, 0.F, -1.F, 0.F);
         }		
         else if (CheckKey('S'))
         {
-            direction += glm::vec3(0.F, 0.F, 1.F);
+            direction += glm::vec4(0.F, 0.F, 1.F, 0.F);
         }
 
         if (CheckKey('A'))
         {
-            direction += glm::vec3(-1.F, 0.F, 0.F);
+            direction += glm::vec4(-1.F, 0.F, 0.F, 0.F);
         }
         else if (CheckKey('D'))
         {
-            direction += glm::vec3(1.F, 0.F, 0.F);
+            direction += glm::vec4(1.F, 0.F, 0.F, 0.F);
         }
 
         if (CheckKey('Q'))
         {
-            direction += glm::vec3(0.F, 1.F, 0.F);
+            direction += glm::vec4(0.F, 1.F, 0.F, 0.F);
         }
         else if (CheckKey('E'))
         {
-            direction += glm::vec3(0.F, -1.F, 0.F);
+            direction += glm::vec4(0.F, -1.F, 0.F, 0.F);
         }
+       
+        glm::mat4 rotationMatrix(glm::mat4_cast(m_camera->getRotation()));
+        //direction = rotationMatrix * direction;
 
-        glm::vec3 translation = m_camera->getTranslation() + direction * SPEED * delta;
+        glm::vec3 translation = m_camera->getTranslation() + glm::vec3(direction) * SPEED * delta;
         m_camera->setTranslation(translation);
 
         // Rotation:

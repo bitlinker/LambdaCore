@@ -90,6 +90,13 @@ namespace LambdaCore
             uint32_t mFlags;            // Texture flags, seem to always be 0
         };
 
+        /* TODO: typelight
+        value 0 is the normal value, to be used with a light map.
+        value 0xFF is to be used when there is no light map.
+        value 1 produces a fast pulsating light
+        value 2 produces a slow pulsating light
+        value 3 to 10 produce various other lighting effects, as defined in The code lump.*/
+
         struct BSPFace
         {
             uint16_t mPlane;          // Plane the face is parallel to
@@ -97,7 +104,9 @@ namespace LambdaCore
             uint32_t mFirstEdge;      // Index of the first surfedge
             uint16_t mNumEdges;       // Number of consecutive surfedges
             uint16_t mTextureInfo;    // Index of the texture info structure
-            uint8_t mStyles[4];       // Specify lighting styles
+            uint8_t mTypelight;       // The kind of lighting that should be applied to the face
+            uint8_t mBaselight;       // from 0xFF (dark) to 0 (bright)
+            uint8_t mLightModels[2];  // two additional light models  
             uint32_t mLightmapOffset; // Offsets into the raw lightmap data
         };
         
