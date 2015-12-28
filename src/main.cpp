@@ -36,18 +36,18 @@ int main(int argc, char **argv)
 {
     Commons::Render::Init init; // TODO: internal
     
-    /*Commons::Render::WindowParams params;
+    Commons::Render::WindowParams params;
     params.width = 1024;
     params.height = 600;
     params.isFullscreen = false;
-    params.title = "LambdaCore";*/
-
-    Commons::Render::WindowParams params;
-    params.width = 1920;
-    params.height = 1080;
-    params.fsaaSamples = 8;
-    params.isFullscreen = true;
     params.title = "LambdaCore";
+
+    //Commons::Render::WindowParams params;
+    //params.width = 1920;
+    //params.height = 1080;
+    //params.fsaaSamples = 8;
+    //params.isFullscreen = true;
+    //params.title = "LambdaCore";
     
     Commons::Render::RenderWindow window(params);
     Commons::Render::GLContext context;
@@ -58,7 +58,13 @@ int main(int argc, char **argv)
 
     Commons::Render::CameraPtr camera(new Commons::Render::Camera());
     camera->setPerspective(45.F, 16.F / 9.F, 10000.F, 0.1F);
-    //camera->setTranslation(glm::vec3(-10.0F, -10.0F, -10.0F));
+    
+    // TODO: in bsp renderer
+    glm::mat4 STATIC_MAP_TRANSFORM = glm::rotate(90.F, -1.F, 0.F, 0.F);
+    glm::vec4 spawnPos(-688, 512, -1645, 1.F);
+    spawnPos = STATIC_MAP_TRANSFORM * spawnPos;
+
+    camera->setTranslation(glm::vec3(spawnPos));
     FreeFlyCameraController camController(camera);
 
     Commons::FileStreamPtr strm_mainwad(new Commons::FileStream("f:/Games/Half-Life/valve/halflife.wad", Commons::FileStream::MODE_READ));
@@ -72,9 +78,9 @@ int main(int argc, char **argv)
     //Commons::Render::TexturePtr tex(new Commons::Render::Texture());
     //texLoader.loadTexture(textureStream, tex);
     
-    
-    Commons::Render::RenderNodePtr rootNode(new Commons::Render::RenderNode("root"));
 
+    Commons::Render::RenderNodePtr rootNode(new Commons::Render::RenderNode("root"));
+    
     BSPRender mapRender(map, textureMgr);
     //Commons::Render::RenderNodePtr mapNode(new BSPMapRender(map));
     //rootNode->attachChild(mapNode);

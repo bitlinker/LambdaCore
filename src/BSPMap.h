@@ -107,7 +107,7 @@ namespace LambdaCore
             uint8_t mTypelight;       // The kind of lighting that should be applied to the face
             uint8_t mBaselight;       // from 0xFF (dark) to 0 (bright)
             uint8_t mLightModels[2];  // two additional light models  
-            uint32_t mLightmapOffset; // Offsets into the raw lightmap data
+            int32_t mLightmapOffset;  // Offsets into the raw lightmap data (or -1 if no lightmap data)
         };
         
         struct BSPClipNode
@@ -212,6 +212,7 @@ namespace LambdaCore
         std::vector<BSPEdge> mEdges;
         std::vector<int32_t> mSurfEdges;
         std::vector<BSPModel> mModels;
+        std::vector<uint8_t> mLightmaps;
     };
 
     typedef std::shared_ptr<BSPMap> BSPMapPtr;

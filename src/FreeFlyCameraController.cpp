@@ -68,7 +68,7 @@ namespace LambdaCore
 
         //if (CheckKey('M')) // Mouse update
         {
-            glm::vec3 angleSpeed;
+            glm::vec3 angleSpeed; // Yaw Pitch Roll
 
             if (CheckKey(VK_LEFT))
             {
@@ -88,12 +88,20 @@ namespace LambdaCore
                 angleSpeed += glm::vec3(0.F, -1.F, 0.F);
             }
             
-            m_angles.x += (angleSpeed.y * ANG_SPEED * delta); // Yaw
-            m_angles.y += (angleSpeed.x * ANG_SPEED * delta); // Pitch
+            m_angles.y += (angleSpeed.x * ANG_SPEED * delta); // Yaw
+            m_angles.x += (angleSpeed.y * ANG_SPEED * delta); // Pitch
             m_angles.z = 0.F; // Roll
         }
-            
-        glm::quat rotation = glm::quat(m_angles);
+
+        // Quat: pitch, yaw, roll
+        glm::quat qYaw(m_angles.x, 0.F, 1.F, 0.F);
+        glm::quat qPitch(m_angles.y, 1.F, 0.F, 0.F);
+        glm::quat qRoll(m_angles.z, 0.F, 0.F, 1.F);
+
+        // TODO
+
+        //glm::quat rotation = /*qRoll * qPitch * */qYaw;
+        glm::quat rotation(m_angles);
         m_camera->setRotation(rotation);
     }
 }

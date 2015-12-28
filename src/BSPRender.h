@@ -24,6 +24,14 @@ namespace LambdaCore
             uint32_t mStartVertex;
             uint32_t mNumVertexes;
             const BSPMap::BSPFace* mFace;
+            uint32_t mFaceIndex;
+        };
+
+        struct FaceData
+        {
+            glm::i32vec2 mMins; // TODO: if needed
+            glm::i32vec2 mExtents;
+            Commons::Render::TexturePtr mLightmapTex;
         };
 
     public:
@@ -37,7 +45,7 @@ namespace LambdaCore
         static void CalcUV(const BSPMap::BSPTextureInfo& texInfo, VertexData& data, uint32_t width, uint32_t height);
 
         void drawLeaf(const BSPMap::BSPLeaf& leaf);
-        void drawFace(const BSPMap::BSPFace& face);
+        void drawFace(uint32_t faceIndex);
 
     private:
         BSPMapPtr m_map;
@@ -57,5 +65,7 @@ namespace LambdaCore
         PlainShaderProgram mShader;
 
         std::vector<Commons::Render::SharedTexturePtr> mTextures;
+
+        std::vector<FaceData> mFaceData;
     };
 }

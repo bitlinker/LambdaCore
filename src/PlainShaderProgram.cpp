@@ -14,12 +14,14 @@ namespace LambdaCore
         "in vec3 v_normal;"
         "void main () {"
         "  frag_colour =  + texture(u_tex1, v_uv);"
-        "  frag_colour.r *=  u_lightness;"
-        "  frag_colour.g *=  u_lightness;"
-        "  frag_colour.b *=  u_lightness;"
-        "  frag_colour.a = frag_colour.a > 0.5 ? 1.0 : 0.0;" // Alpha test
-        //"  frag_colour = vec4(v_normal[0], v_normal[1], 1.0, 1.0);"
-        //"  frag_colour = vec4(1.0, 1.0, 0.0, 1.0);"
+
+        // LTMAP
+        "  frag_colour.a = 1.0;"
+
+        //"  frag_colour.r *=  u_lightness;"
+        //"  frag_colour.g *=  u_lightness;"
+        //"  frag_colour.b *=  u_lightness;"
+        "  frag_colour.a = frag_colour.a > 0.5 ? 1.0 : 0.0;" // Alpha test        
         "}";
 
     static const std::string VERTEX_SHADER =
@@ -89,8 +91,6 @@ namespace LambdaCore
         if (!isLinked)
             throw Commons::GLException("Can't link shader program. See log for details");
 
-
-
         bool isValidated = validate();
         getInfoLog(log);
         WriteShaderLog(log);
@@ -114,8 +114,6 @@ namespace LambdaCore
         m_uVecT = getUniformLocation("u_vecT");
         m_uDistST = getUniformLocation("u_distST");
         m_uTexSize = getUniformLocation("u_texSize");
-
-        setUniformSampler2D(m_uTex1, 0);
     }
 
     void PlainShaderProgram::setMVP(const glm::mat4& matrix)
@@ -143,6 +141,6 @@ namespace LambdaCore
         setUniformVec3(m_uVecS, vecS);
         setUniformVec3(m_uVecT, vecT);
         setUniformVec2(m_uDistST, distST);
-        setUniformVec2(m_uTexSize, texSize);
+        setUniformVec2(m_uTexSize, texSize);        
     }
 }

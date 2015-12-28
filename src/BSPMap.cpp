@@ -161,7 +161,7 @@ namespace LambdaCore
 
     void BSPMap::readLightmaps(const Commons::IOStreamPtr stream)
     {
-        // TODO
+        readTypedVec(LUMP_LIGHTING, stream, mLightmaps);
     }
 
     void BSPMap::readClipNodes(const Commons::IOStreamPtr stream)
