@@ -8,39 +8,44 @@ namespace LambdaCore
     static const std::string FRAGMENT_SHADER =
         "#version 400\n"
         "out vec4 frag_colour;"
-        "uniform sampler2D u_tex1;"
+        "uniform sampler2D u_texDiffuse;"
+        "uniform sampler2D u_texLightmap;"
         "uniform float u_lightness;"
-        "in vec2 v_uv;"
+        "in vec2 v_uvTexture;"
+        "in vec2 v_uvLightmap;"
         "in vec3 v_normal;"
         "void main () {"
-        "  frag_colour =  + texture(u_tex1, v_uv);"
-
-        // LTMAP
-        "  frag_colour.a = 1.0;"
-
-        //"  frag_colour.r *=  u_lightness;"
-        //"  frag_colour.g *=  u_lightness;"
-        //"  frag_colour.b *=  u_lightness;"
+        "  vec4 color = texture(u_texDiffuse, v_uvTexture);"
+        "  vec4 lightmap = texture(u_texLightmap, v_uvLightmap);"
+        "  vec4 value = color * lightmap * u_lightness * 1.2 + 0.1;"
+        "  frag_colour.rgb = value.rgb;"
+        "  frag_colour.a = color.a;"
         "  frag_colour.a = frag_colour.a > 0.5 ? 1.0 : 0.0;" // Alpha test        
         "}";
 
     static const std::string VERTEX_SHADER =
         "#version 400\n"
         //"layout(location = 0) in vec3 vp;"
-        "in vec3 vp;"
-        "uniform mat4 m_MVP;"
+        "in vec3 a_vp;"
+        "uniform mat4 u_MVP;"
         "uniform vec3 u_normal;"
-        "uniform vec3 u_vecS;"
-        "uniform vec3 u_vecT;"
-        "uniform vec2 u_distST;"
+
+        "uniform mat3 u_texMatrix;"
+        "uniform vec2 u_texOffset;"
         "uniform vec2 u_texSize;"
-        "out vec2 v_uv;"
+        "uniform vec2 u_lmOffset;"
+        "uniform vec2 u_lmSize;"
+
+        "out vec2 v_uvTexture;"
+        "out vec2 v_uvLightmap;"
         "out vec3 v_normal;"
+
         "void main () {"
-        "  v_uv.x = (dot(u_vecS, vp) + u_distST.x) / u_texSize.x;"
-        "  v_uv.y = (dot(u_vecT, vp) + u_distST.y) / u_texSize.y;"
-        "  gl_Position = m_MVP * vec4(vp, 1.0);"
-        "  v_normal = (m_MVP * vec4(u_normal, 0.0)).xyz;"
+        "  vec3 uv3 = a_vp * u_texMatrix;"
+        "  v_uvTexture = (uv3.xy + u_texOffset) / u_texSize;"
+        "  v_uvLightmap = (uv3.xy + u_lmOffset) / u_lmSize;"
+        "  gl_Position = u_MVP * vec4(a_vp, 1.0);"
+        "  v_normal = (u_MVP * vec4(u_normal, 0.0)).xyz;"
         "}";
 
     PlainShaderProgram::PlainShaderProgram()
@@ -97,28 +102,27 @@ namespace LambdaCore
         if (!isValidated)
             throw Commons::GLException("Can't validate shader program. See log for details");
 
-        //uint32_t a = m_shader->getNumAttributes();
-        //uint32_t un = m_shader->getNumUniforms();
-
         // Attributes:
-        m_aVertexPos = getAttributeLocation("vp");
+        m_aVertexPos = getAttributeLocation("a_vp");
 
         // TODO: helpers...
         // Uniforms:
-        m_uMVP = getUniformLocation("m_MVP");
+        m_uMVP = getUniformLocation("u_MVP");
         m_uNormal = getUniformLocation("u_normal");
-        m_uTex1 = getUniformLocation("u_tex1");
+        m_uTexDiffuse = getUniformLocation("u_texDiffuse");
+        m_uTexLightmap = getUniformLocation("u_texLightmap");
         m_uLightness = getUniformLocation("u_lightness");
 
-        m_uVecS = getUniformLocation("u_vecS");
-        m_uVecT = getUniformLocation("u_vecT");
-        m_uDistST = getUniformLocation("u_distST");
+        m_uTexMatrix = getUniformLocation("u_texMatrix");
+        m_uTexOffset = getUniformLocation("u_texOffset");
         m_uTexSize = getUniformLocation("u_texSize");
+        m_uLmOffset = getUniformLocation("u_lmOffset");
+        m_uLmSize = getUniformLocation("u_lmSize");
     }
 
     void PlainShaderProgram::setMVP(const glm::mat4& matrix)
     {
-        setUniformMatrix(m_uMVP, matrix);
+        setUniformMat4(m_uMVP, matrix);
     }
 
     void PlainShaderProgram::setNormal(const glm::vec3& normal)
@@ -126,9 +130,14 @@ namespace LambdaCore
         setUniformVec3(m_uNormal, normal);
     }
 
-    void PlainShaderProgram::setTex1Sampler(uint32_t sampler)
+    void PlainShaderProgram::setTexDiffuseSampler(int32_t sampler)
     {
-        setUniformSampler2D(m_uTex1, sampler);
+        setUniformSampler2D(m_uTexDiffuse, sampler);
+    }
+
+    void PlainShaderProgram::setTexLightmapSampler(int32_t sampler)
+    {
+        setUniformSampler2D(m_uTexLightmap, sampler);
     }
 
     void PlainShaderProgram::setLightness(float lightness)
@@ -136,11 +145,13 @@ namespace LambdaCore
         setUniformFloat(m_uLightness, lightness);
     }
 
-    void PlainShaderProgram::setTextureMapping(const glm::vec3& vecS, const glm::vec3& vecT, const glm::vec2& distST, const glm::vec2& texSize)
+    void PlainShaderProgram::setTextureMapping(const glm::vec3& vecS, const glm::vec3& vecT, const glm::vec2& texOffset, const glm::vec2& texSize, const glm::vec2& lmOffset, const glm::vec2& lmSize)
     {
-        setUniformVec3(m_uVecS, vecS);
-        setUniformVec3(m_uVecT, vecT);
-        setUniformVec2(m_uDistST, distST);
-        setUniformVec2(m_uTexSize, texSize);        
-    }
+        glm::mat3 texMat(vecS, vecT, glm::vec3());
+        setUniformMat3(m_uTexMatrix, texMat);
+        setUniformVec2(m_uTexOffset, texOffset);
+        setUniformVec2(m_uTexSize, texSize);
+        setUniformVec2(m_uLmOffset, lmOffset);
+        setUniformVec2(m_uLmSize, lmSize);
+    }    
 }

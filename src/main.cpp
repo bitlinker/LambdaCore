@@ -37,8 +37,8 @@ int main(int argc, char **argv)
     Commons::Render::Init init; // TODO: internal
     
     Commons::Render::WindowParams params;
-    params.width = 1024;
-    params.height = 600;
+    params.width = 1600;
+    params.height = 900;
     params.isFullscreen = false;
     params.title = "LambdaCore";
 
@@ -53,7 +53,7 @@ int main(int argc, char **argv)
     Commons::Render::GLContext context;
 
     // TODO: self stream object, exceptions or checks
-    Commons::FileStreamPtr strm_map(new Commons::FileStream("f:/Games/Half-Life/valve/maps/crossfire.bsp", Commons::FileStream::MODE_READ));
+    Commons::FileStreamPtr strm_map(new Commons::FileStream("f:/Games/Half-Life/valve/maps/c1a4.bsp", Commons::FileStream::MODE_READ));
     BSPMapPtr map = std::make_shared<BSPMap>(strm_map);
 
     Commons::Render::CameraPtr camera(new Commons::Render::Camera());

@@ -119,16 +119,17 @@ namespace LambdaCore
                     tex->setTexData2d(0, GL_RGB, lightmapSize.x, lightmapSize.y, GL_RGB, GL_UNSIGNED_BYTE, &m_map->mLightmaps[face.mLightmapOffset]);
                     faceData.mLightmapTex = tex;                    
                     tex->setMagFilter(GL_LINEAR);
-                    tex->setMinFilter(GL_LINEAR);
-                    glTexParameteri(GL_TEXTURE_2D,
-                        GL_TEXTURE_WRAP_S,
-                        GL_REPEAT);
-                    glTexParameteri(GL_TEXTURE_2D,
-                        GL_TEXTURE_WRAP_T,
-                        GL_REPEAT);
+                    tex->setMinFilter(GL_LINEAR); // TODO: enums
                 }
             }            
         }
+
+        initVBOs();
+    }
+
+    void BSPRender::initVBOs()
+    {
+        // TODO
     }
 
     void genLightmapTex()
@@ -165,11 +166,14 @@ namespace LambdaCore
         {
             // TODO: load all vertexes in buffer statically
             ScopeBind bindVertexes(mVertexes); // TODO: static
-            mVertexes.setData(sizeof(VertexData) * mVertexData.size(), &mVertexData[0], GL_DYNAMIC_DRAW);
+            mVertexes.setData(sizeof(VertexData) * mVertexData.size(), &mVertexData[0], GL_STATIC_DRAW);
 
             ScopeBind bind(mVao);
 
             mShader.use(); // TODO: bind?
+
+            mShader.setTexDiffuseSampler(0); // TODO: constants
+            mShader.setTexLightmapSampler(1);
 
             uint32_t vertexAttributeLocation = mShader.getVertexPositionLocation();
 
@@ -179,13 +183,11 @@ namespace LambdaCore
 
             glVertexAttribPointer(vertexAttributeLocation, 3, GL_FLOAT, GL_FALSE, sizeof(VertexData), NULL);
 
-
             glm::mat4 camMatrix = camera->getProjection() * camera->getModelview();
             glm::mat4 STATIC_MAP_TRANSFORM = glm::rotate(90.F, -1.F, 0.F, 0.F);
 
             // TODO: models transformations
             mShader.setMVP(camMatrix * STATIC_MAP_TRANSFORM);
-            mShader.setTex1Sampler(0);
 
             auto it = mFaceBatches.begin();
             const auto itEnd = mFaceBatches.end();
@@ -206,37 +208,48 @@ namespace LambdaCore
                 const BSPMap::BSPMipTex& tex = m_map->mMipTextures[texInfo.mMiptex];
                 
                 // TODO: bind wrapper to minimize overhead
-                //ScopeBind texBind(*mTextures[texInfo.mMiptex]->get().get())
+                glActiveTexture(GL_TEXTURE0 + 0);
                 
+                auto ltmShared = mTextures[texInfo.mMiptex];
+                if (ltmShared)
+                {
+                    ltmShared->get().get()->bind();
+                }
+                                
                 // Lightmap:
-                // TODO: use correct index
-                const TexturePtr& lightmap = mFaceData[it->mFaceIndex].mLightmapTex;;
+                glActiveTexture(GL_TEXTURE0 + 1); // TODO: consts here?                                
+                const TexturePtr& lightmap = mFaceData[it->mFaceIndex].mLightmapTex; // TODO: use correct index
                 if (lightmap)
                 {
                     lightmap->bind();                
                 }
-                //ScopeBind texBind(*mTextures[texInfo.mMiptex]->get().get()); 
+                else
+                {
+                    ::glBindTexture(GL_TEXTURE_2D, 0); // TODO
+                }
 
                 // TODO: pack this in single matrix?
                 mShader.setTextureMapping(
                     texInfo.mS,
                     texInfo.mT,
+
+                    glm::vec2(texInfo.mSShift, texInfo.mTShift),
+                    glm::vec2(tex.mWidth, tex.mHeight),
+                    
                     glm::vec2(texInfo.mSShift - mFaceData[it->mFaceIndex].mMins.x + (LIGHTMAP_SAMPLE_SIZE >> 1),
                         texInfo.mTShift - mFaceData[it->mFaceIndex].mMins.y + (LIGHTMAP_SAMPLE_SIZE >> 1)
                         ),
-                    //glm::vec2(tex.mWidth, tex.mHeight)
                     glm::vec2(
                         ((mFaceData[it->mFaceIndex].mExtents.x / LIGHTMAP_SAMPLE_SIZE) + 1) * LIGHTMAP_SAMPLE_SIZE,
                         ((mFaceData[it->mFaceIndex].mExtents.y / LIGHTMAP_SAMPLE_SIZE) + 1) * LIGHTMAP_SAMPLE_SIZE
                         )
                 );
-
-                // configure lightmap:
-                // TODO
-                // 1. Precalc extents for every face
-                // 2. Preload lightmap textures with size according to extents (combine in atlas for performance?)
                 
-                glDrawArrays(GL_TRIANGLE_FAN, it->mStartVertex, it->mNumVertexes); // TODO: check
+                // TODO: combine lm in atlas
+                // TODO: static vertex data
+                // TODO: draw models independently
+                
+                glDrawArrays(GL_TRIANGLE_FAN, it->mStartVertex, it->mNumVertexes);
 
                 ++it;
             }

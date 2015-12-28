@@ -42,6 +42,10 @@ namespace LambdaCore
         void render(const Commons::Render::CameraPtr& camera);
 
     private:
+
+        void initVBOs();
+
+        // TODO: rm
         static void CalcUV(const BSPMap::BSPTextureInfo& texInfo, VertexData& data, uint32_t width, uint32_t height);
 
         void drawLeaf(const BSPMap::BSPLeaf& leaf);
