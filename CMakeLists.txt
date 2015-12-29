@@ -55,9 +55,10 @@ set(LAMBDA_CORE_SOURCES
     src/BSPRender.h
     src/MipTexLoader.cpp
     src/MipTexLoader.h
-    
-    src/PlainShaderProgram.cpp
-    src/PlainShaderProgram.h
+    src/LightmapMgr.cpp
+    src/LightmapMgr.h    
+    src/BSPShaderProgram.cpp
+    src/BSPShaderProgram.h
     src/FreeFlyCameraController.cpp
     src/FreeFlyCameraController.h
 )

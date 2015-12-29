@@ -6,7 +6,7 @@
 #include <Render/VertexArrayObject.h>
 #include <Render/BufferObject.h>
 #include <Render/ScopeBind.h>
-#include <PlainShaderProgram.h>
+#include <BSPShaderProgram.h>
 
 #include <Common/Singleton.h>
 
@@ -24,7 +24,8 @@ namespace LambdaCore
     Beware that sky textures are made of two distinct parts.*/
 
     BSPRender::BSPRender(const BSPMapPtr& map, const Commons::Render::SharedTextureMgrPtr& textureManager)
-        : m_map(map)
+        : mLightmapMgr(256, 64)
+        , mMap(map)
         , mTexMgr(textureManager)
         , mVao()
         , mVertexes(GL_ARRAY_BUFFER)
@@ -48,13 +49,16 @@ namespace LambdaCore
             }
         }
 
+        // TODO: remove then lightmap packaging will be done
+        ::glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
         // Calc face data:
         // TODO: func
         {            
-            mFaceData.resize(m_map->mFaces.size());
-            for (uint32_t fc = 0; fc < m_map->mFaces.size(); ++fc)
+            mFaceData.resize(mMap->mFaces.size());
+            for (uint32_t fc = 0; fc < mMap->mFaces.size(); ++fc)
             {
-                const BSPMap::BSPFace& face = m_map->mFaces[fc]; // TODO: func for faces
+                const BSPMap::BSPFace& face = mMap->mFaces[fc]; // TODO: func for faces
                 FaceData& faceData = mFaceData[fc];
 
                 // TODO: in map class?
@@ -64,17 +68,17 @@ namespace LambdaCore
                 
                 glm::vec3 *pVertex = nullptr;                
 
-                const BSPMap::BSPTextureInfo& texInfo = m_map->mTexInfo[face.mTextureInfo];
+                const BSPMap::BSPTextureInfo& texInfo = mMap->mTexInfo[face.mTextureInfo];
                 for (uint32_t i = 0; i < face.mNumEdges; ++i)
                 {
-                    int32_t edge = m_map->mSurfEdges[face.mFirstEdge + i];
+                    int32_t edge = mMap->mSurfEdges[face.mFirstEdge + i];
                     if (edge >= 0)
                     {
-                        pVertex = &m_map->mVertices[m_map->mEdges[edge].mVertex[0]];
+                        pVertex = &mMap->mVertices[mMap->mEdges[edge].mVertex[0]];
                     }
                     else
                     {
-                        pVertex = &m_map->mVertices[m_map->mEdges[-edge].mVertex[1]];
+                        pVertex = &mMap->mVertices[mMap->mEdges[-edge].mVertex[1]];
                     }
 
                     glm::vec2 value;
@@ -110,16 +114,15 @@ namespace LambdaCore
                 // TODO: combine in texture atlas
                 if (face.mLightmapOffset >= 0)
                 {                    
-                    // TODO: remove then lightmap packaging will be done
-                    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
                     TexturePtr tex(new Texture());
-
                     // TODO: 4 lightmaps....
                     //MAXLIGHTMAPS
-                    tex->setTexData2d(0, GL_RGB, lightmapSize.x, lightmapSize.y, GL_RGB, GL_UNSIGNED_BYTE, &m_map->mLightmaps[face.mLightmapOffset]);
-                    faceData.mLightmapTex = tex;                    
-                    tex->setMagFilter(GL_LINEAR);
-                    tex->setMinFilter(GL_LINEAR); // TODO: enums
+                    tex->setData(0, Texture::FORMAT_RGB, lightmapSize.x, lightmapSize.y, &mMap->mLightmaps[face.mLightmapOffset]);
+                    tex->setFilters(Texture::FILTER_LINEAR, Texture::FILTER_LINEAR);
+                    tex->setWrap(Texture::WRAP_CLAMP, Texture::WRAP_CLAMP);
+                    faceData.mLightmapTex = tex;
+                    // TODO: alloc lightmap in the lightmap manager
+                    //mLightmapMgr.allocLightmap();
                 }
             }            
         }
@@ -148,12 +151,12 @@ namespace LambdaCore
         mFaceBatches.clear();
 
         // Check for visible leafs        
-        int32_t camLeaf = m_map->getPointLeaf(camera->getTranslation());
-        for (int32_t i = 0; i < m_map->mLeafs.size(); ++i)
+        int32_t camLeaf = mMap->getPointLeaf(camera->getTranslation());
+        for (int32_t i = 0; i < mMap->mLeafs.size(); ++i)
         {
-            if (m_map->isLeafVisible(camLeaf, i))
+            if (mMap->isLeafVisible(camLeaf, i))
             {
-                const BSPMap::BSPLeaf& leaf = m_map->mLeafs[i];
+                const BSPMap::BSPLeaf& leaf = mMap->mLeafs[i];
                 AABB aabb(leaf.mMins, leaf.mMaxs);
                 if (camera->isInFrustum(aabb))
                 {
@@ -195,7 +198,7 @@ namespace LambdaCore
             {
                 // TODO: funcs
                 // Configure lighting:
-                const BSPMap::BSPPlane& plane = m_map->mPlanes[it->mFace->mPlane];
+                const BSPMap::BSPPlane& plane = mMap->mPlanes[it->mFace->mPlane];
                 glm::vec3 normal = it->mFace->mPlaneSide == 0 ? plane.mNormal : -plane.mNormal;
                 mShader.setNormal(normal);
 
@@ -204,8 +207,8 @@ namespace LambdaCore
                 mShader.setLightness(lightness);
                 
                 // Configure texture mapping
-                const BSPMap::BSPTextureInfo& texInfo = m_map->mTexInfo[it->mFace->mTextureInfo];
-                const BSPMap::BSPMipTex& tex = m_map->mMipTextures[texInfo.mMiptex];
+                const BSPMap::BSPTextureInfo& texInfo = mMap->mTexInfo[it->mFace->mTextureInfo];
+                const BSPMap::BSPMipTex& tex = mMap->mMipTextures[texInfo.mMiptex];
                 
                 // TODO: bind wrapper to minimize overhead
                 glActiveTexture(GL_TEXTURE0 + 0);
@@ -266,7 +269,7 @@ namespace LambdaCore
 
         for (uint16_t i = 0; i < leaf.mNumMarkSurfaces; ++i)
         {
-            uint16_t faceIndex = m_map->mMarkSurfaces[leaf.mFirstMarkSurface + i];
+            uint16_t faceIndex = mMap->mMarkSurfaces[leaf.mFirstMarkSurface + i];
             if (!mVisFaces[faceIndex])
             {
                 drawFace(faceIndex); // TODO: sorting
@@ -283,15 +286,15 @@ namespace LambdaCore
 
     void BSPRender::drawFace(uint32_t faceIndex)
     {
-        const BSPMap::BSPFace& face = m_map->mFaces[faceIndex];
+        const BSPMap::BSPFace& face = mMap->mFaces[faceIndex];
         FaceBatch batch;
 
-        const BSPMap::BSPTextureInfo& texInfo = m_map->mTexInfo[face.mTextureInfo];
+        const BSPMap::BSPTextureInfo& texInfo = mMap->mTexInfo[face.mTextureInfo];
 
         // TODO: calc UV in shader?
         // TODO: set texture and lightmap        
         //face.mLightmapOffset;
-        const BSPMap::BSPMipTex& tex = m_map->mMipTextures[texInfo.mMiptex];
+        const BSPMap::BSPMipTex& tex = mMap->mMipTextures[texInfo.mMiptex];
         batch.mFace = &face;
         // TODO
         batch.mFaceIndex = faceIndex;
@@ -310,23 +313,23 @@ namespace LambdaCore
         for (int16_t i = 0; i < face.mNumEdges; ++i)
         {
             uint16_t edgeVerts[2];
-            int32_t edgeIndex = m_map->mSurfEdges[face.mFirstEdge + i];
+            int32_t edgeIndex = mMap->mSurfEdges[face.mFirstEdge + i];
             if (edgeIndex > 0)
             {
-                const BSPMap::BSPEdge& edge = m_map->mEdges[edgeIndex];
+                const BSPMap::BSPEdge& edge = mMap->mEdges[edgeIndex];
                 edgeVerts[0] = edge.mVertex[0];
                 edgeVerts[1] = edge.mVertex[1];
             }
             else
             {
-                const BSPMap::BSPEdge& edge = m_map->mEdges[-edgeIndex];
+                const BSPMap::BSPEdge& edge = mMap->mEdges[-edgeIndex];
                 edgeVerts[0] = edge.mVertex[1];
                 edgeVerts[1] = edge.mVertex[0];
             }
 
             if (i == 0) // First edge, start triangle
             {
-                vertexData.mPos = m_map->mVertices[edgeVerts[0]];
+                vertexData.mPos = mMap->mVertices[edgeVerts[0]];
                 //CalcUV(texInfo, vertexData, tex.mWidth, tex.mHeight);
                 mVertexData.push_back(vertexData);
                 startVert = edgeVerts[0];
@@ -336,7 +339,7 @@ namespace LambdaCore
                 assert(edgeVerts[0] == lastVert);
             }
 
-            vertexData.mPos = m_map->mVertices[edgeVerts[1]];
+            vertexData.mPos = mMap->mVertices[edgeVerts[1]];
             //CalcUV(texInfo, vertexData, tex.mWidth, tex.mHeight);
             mVertexData.push_back(vertexData);
 

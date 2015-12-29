@@ -65,7 +65,7 @@ namespace LambdaCore
         {
             throw SerializationException(StringUtils::FormatString("Lump length mismatch for lump %d: expected %d, actual %d", lump, arrayLen, len));
         }
-        vec.resize(len);
+        vec.resize(cnt);
         readLump(lump, stream, &vec[0], len);
     }
 

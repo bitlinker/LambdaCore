@@ -7,7 +7,8 @@
 #include <Render/BufferObject.h>
 #include <Render/Texture.h>
 #include <Render/SharedTextureMgr.h>
-#include <PlainShaderProgram.h>
+#include <BSPShaderProgram.h>
+#include <LightmapMgr.h>
 
 namespace LambdaCore
 {
@@ -52,7 +53,8 @@ namespace LambdaCore
         void drawFace(uint32_t faceIndex);
 
     private:
-        BSPMapPtr m_map;
+        LightmapMgr mLightmapMgr;
+        BSPMapPtr mMap;
         Commons::Render::SharedTextureMgrPtr mTexMgr;
 
         Commons::Render::VertexArrayObject mVao;
@@ -66,7 +68,7 @@ namespace LambdaCore
         std::vector<VertexData> mVertexData;
         std::vector<FaceBatch> mFaceBatches;
 
-        PlainShaderProgram mShader;
+        BSPShaderProgram mShader;
 
         std::vector<Commons::Render::SharedTexturePtr> mTextures;
 

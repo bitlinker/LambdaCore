@@ -1,5 +1,5 @@
 #include <Render/RenderCommon.h>
-#include <PlainShaderProgram.h>
+#include <BSPShaderProgram.h>
 #include <Logger/Log.h>
 #include <Exception/exception.h>
 
@@ -48,13 +48,13 @@ namespace LambdaCore
         "  v_normal = (u_MVP * vec4(u_normal, 0.0)).xyz;"
         "}";
 
-    PlainShaderProgram::PlainShaderProgram()
+    BSPShaderProgram::BSPShaderProgram()
         : ShaderProgram()
     {
         init();
     }
 
-    PlainShaderProgram::~PlainShaderProgram()
+    BSPShaderProgram::~BSPShaderProgram()
     {
     }
 
@@ -66,7 +66,7 @@ namespace LambdaCore
         }
     }
 
-    void PlainShaderProgram::init()
+    void BSPShaderProgram::init()
     {
         Commons::Render::ShaderPtr vs(new Commons::Render::Shader(GL_VERTEX_SHADER));
         vs->setSource(VERTEX_SHADER);
@@ -120,32 +120,32 @@ namespace LambdaCore
         m_uLmSize = getUniformLocation("u_lmSize");
     }
 
-    void PlainShaderProgram::setMVP(const glm::mat4& matrix)
+    void BSPShaderProgram::setMVP(const glm::mat4& matrix)
     {
         setUniformMat4(m_uMVP, matrix);
     }
 
-    void PlainShaderProgram::setNormal(const glm::vec3& normal)
+    void BSPShaderProgram::setNormal(const glm::vec3& normal)
     {
         setUniformVec3(m_uNormal, normal);
     }
 
-    void PlainShaderProgram::setTexDiffuseSampler(int32_t sampler)
+    void BSPShaderProgram::setTexDiffuseSampler(int32_t sampler)
     {
         setUniformSampler2D(m_uTexDiffuse, sampler);
     }
 
-    void PlainShaderProgram::setTexLightmapSampler(int32_t sampler)
+    void BSPShaderProgram::setTexLightmapSampler(int32_t sampler)
     {
         setUniformSampler2D(m_uTexLightmap, sampler);
     }
 
-    void PlainShaderProgram::setLightness(float lightness)
+    void BSPShaderProgram::setLightness(float lightness)
     {
         setUniformFloat(m_uLightness, lightness);
     }
 
-    void PlainShaderProgram::setTextureMapping(const glm::vec3& vecS, const glm::vec3& vecT, const glm::vec2& texOffset, const glm::vec2& texSize, const glm::vec2& lmOffset, const glm::vec2& lmSize)
+    void BSPShaderProgram::setTextureMapping(const glm::vec3& vecS, const glm::vec3& vecT, const glm::vec2& texOffset, const glm::vec2& texSize, const glm::vec2& lmOffset, const glm::vec2& lmSize)
     {
         glm::mat3 texMat(vecS, vecT, glm::vec3());
         setUniformMat3(m_uTexMatrix, texMat);

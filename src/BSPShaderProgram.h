@@ -3,11 +3,11 @@
 
 namespace LambdaCore
 {    
-    class PlainShaderProgram : public Commons::Render::ShaderProgram
+    class BSPShaderProgram : public Commons::Render::ShaderProgram
     {
     public:
-        PlainShaderProgram();
-        virtual ~PlainShaderProgram();
+        BSPShaderProgram();
+        virtual ~BSPShaderProgram();
 
         void setMVP(const glm::mat4& matrix);
         void setNormal(const glm::vec3& normal);
@@ -37,5 +37,5 @@ namespace LambdaCore
         uint32_t m_uLmSize;
     };
 
-    typedef std::shared_ptr<PlainShaderProgram> PlainShaderProgramPtr;
+    typedef std::shared_ptr<BSPShaderProgram> PlainShaderProgramPtr;
 }
