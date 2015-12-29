@@ -33,6 +33,7 @@ namespace LambdaCore
     {
         ScopeBind texBind(*texture);
         texture->setFilters(Texture::FILTER_LINEAR_MIPMAP_LINEAR, Texture::FILTER_LINEAR);
+        texture->setMipLevels(0, HL_MIPLEVELS - 1);
         texture->setWrap(Texture::WRAP_REPEAT, Texture::WRAP_REPEAT);
 
         MipTex header;

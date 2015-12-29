@@ -17,6 +17,9 @@ namespace LambdaCore
 {  
     static const int32_t LIGHTMAP_SAMPLE_SIZE = 16;
 
+    static const uint32_t TEXTURE_SAMPLER_DIFFUSE = 0;
+    static const uint32_t TEXTURE_SAMPLER_LIGHTMAP = 1;
+
     // TODO: animation - in render
     /*if it begins by * it will be animated like lava or water.
     if it begins by + then it will be animated with frames, and the second letter of the name will be the frame number.Those numbers begin at 0, and go up to 9 at the maximum.
@@ -175,8 +178,8 @@ namespace LambdaCore
 
             mShader.use(); // TODO: bind?
 
-            mShader.setTexDiffuseSampler(0); // TODO: constants
-            mShader.setTexLightmapSampler(1);
+            mShader.setTexDiffuseSampler(TEXTURE_SAMPLER_DIFFUSE);
+            mShader.setTexLightmapSampler(TEXTURE_SAMPLER_LIGHTMAP);
 
             uint32_t vertexAttributeLocation = mShader.getVertexPositionLocation();
 
@@ -211,7 +214,7 @@ namespace LambdaCore
                 const BSPMap::BSPMipTex& tex = mMap->mMipTextures[texInfo.mMiptex];
                 
                 // TODO: bind wrapper to minimize overhead
-                glActiveTexture(GL_TEXTURE0 + 0);
+                glActiveTexture(GL_TEXTURE0 + TEXTURE_SAMPLER_DIFFUSE);
                 
                 auto ltmShared = mTextures[texInfo.mMiptex];
                 if (ltmShared)
@@ -220,7 +223,7 @@ namespace LambdaCore
                 }
                                 
                 // Lightmap:
-                glActiveTexture(GL_TEXTURE0 + 1); // TODO: consts here?                                
+                glActiveTexture(GL_TEXTURE0 + TEXTURE_SAMPLER_LIGHTMAP);
                 const TexturePtr& lightmap = mFaceData[it->mFaceIndex].mLightmapTex; // TODO: use correct index
                 if (lightmap)
                 {
