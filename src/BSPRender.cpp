@@ -13,6 +13,123 @@
 using namespace Commons;
 using namespace Commons::Render;
 
+inline unsigned char getpixel(const uint8_t* src, int32_t srcWidth, int32_t srcHeight, int32_t x, int32_t y, int32_t numChannels, int32_t channel)
+{
+    // Border color
+    //if (x < 0 || y < 0 || x >= srcWidth || y >= srcHeight)
+    //    return 128;
+
+    // Clamp sampler implementation
+    if (x < 0)
+        x = 0;
+
+    if (x >= srcWidth)
+        x = srcWidth - 1;
+
+    if (y < 0)
+        y = 0;
+
+    if (y >= srcHeight)
+        y = srcHeight - 1;
+
+    
+    return src[(x + y * srcWidth) * 3 + channel];
+}
+
+// TODO: move
+static void BicubicInterpolate(const uint8_t *src, int32_t srcWidth, int32_t srcHeight, int32_t numChannels, uint8_t *dst, int32_t dstWidth, int32_t dstHeight)
+{
+    const float tx = float(srcWidth) / dstWidth;
+    const float ty = float(srcHeight) / dstHeight;
+    const int32_t srcStride = srcWidth * numChannels;
+    const int32_t dstStride = dstWidth * numChannels;
+
+    float C[5] = { 0 };
+
+    for (int32_t i = 0; i < dstHeight; ++i)
+    {
+        for (int32_t j = 0; j < dstWidth; ++j)
+        {
+            const int32_t x = uint32_t(tx * j);
+            const int32_t y = uint32_t(ty * i);
+            const float dx = tx * j - x;
+            const float dy = ty * i - y;
+
+            for (int32_t k = 0; k < numChannels; ++k)
+            {
+                for (int32_t jj = 0; jj < 4; ++jj)
+                {
+                    const int32_t z = y - 1 + jj;
+                    float a0 = getpixel(src, srcWidth, srcHeight, x, z, numChannels, k);
+                    float d0 = getpixel(src, srcWidth, srcHeight, x - 1, z, numChannels, k) - a0;
+                    float d2 = getpixel(src, srcWidth, srcHeight, x + 1, z, numChannels, k) - a0;
+                    float d3 = getpixel(src, srcWidth, srcHeight, x + 2, z, numChannels, k) - a0;
+                    float a1 = -1.0 / 3 * d0 + d2 - 1.0 / 6 * d3;
+                    float a2 = 1.0 / 2 * d0 + 1.0 / 2 * d2;
+                    float a3 = -1.0 / 6 * d0 - 1.0 / 2 * d2 + 1.0 / 6 * d3;
+                    C[jj] = a0 + a1 * dx + a2 * dx * dx + a3 * dx * dx * dx;
+
+                    d0 = C[0] - C[1];
+                    d2 = C[2] - C[1];
+                    d3 = C[3] - C[1];
+                    a0 = C[1];
+                    a1 = -1.0 / 3 * d0 + d2 - 1.0 / 6 * d3;
+                    a2 = 1.0 / 2 * d0 + 1.0 / 2 * d2;
+                    a3 = -1.0 / 6 * d0 - 1.0 / 2 * d2 + 1.0 / 6 * d3;
+                    float value = a0 + a1 * dy + a2 * dy * dy + a3 * dy * dy * dy;
+
+                    if (value > 255.F)
+                        value = 255.F;
+
+                    if (value < 0.F)
+                        value = 0.F;
+
+                    dst[i * dstStride + j * numChannels + k] = (uint8_t)(value);
+                }
+            }
+        }
+    }
+}
+
+
+static void BilinearInterpolate(const uint8_t* src, int32_t srcWidth, int32_t srcHeight, int32_t numChannels, uint8_t *dst, int32_t dstWidth, int32_t dstHeight)
+{
+    int32_t a, b, c, d, x, y, index;
+    float tx = (float)(srcWidth - 1) / dstWidth;
+    float ty = (float)(srcHeight - 1) / dstHeight;
+    float x_diff, y_diff;
+    const int32_t srcStride = srcWidth * numChannels;
+    const int32_t dstStride = dstWidth * numChannels;
+
+    for (int32_t i = 0; i < dstHeight; i++)
+    {
+        for (int32_t j = 0; j < dstWidth; j++)
+        {
+            x = (int32_t)(tx * j);
+            y = (int32_t)(ty * i);
+
+            x_diff = ((tx * j) - x);
+            y_diff = ((ty * i) - y);
+
+            index = y * srcStride + x * numChannels;
+            a = (int32_t)index;
+            b = (int32_t)(index + numChannels);
+            c = (int32_t)(index + srcStride);
+            d = (int32_t)(index + srcStride + numChannels);
+
+            for (int32_t k = 0; k < numChannels; k++)
+            {
+                dst[i * dstStride + j * numChannels + k] =
+                    src[a + k] * (1.F - x_diff) * (1.F - y_diff)
+                    + src[b + k] * (1.F - y_diff) * (x_diff)
+                    +src[c + k] * (y_diff)* (1.F - x_diff)
+                    + src[d + k] * (y_diff)* (x_diff);
+            }
+        }
+    }
+}
+
+
 namespace LambdaCore
 {  
     static const int32_t LIGHTMAP_SAMPLE_SIZE = 16;
@@ -27,13 +144,13 @@ namespace LambdaCore
     Beware that sky textures are made of two distinct parts.*/
 
     BSPRender::BSPRender(const BSPMapPtr& map, const Commons::Render::SharedTextureMgrPtr& textureManager)
-        : mLightmapMgr(256, 64)
+        : mLightmapMgr(128, 64)
         , mMap(map)
         , mTexMgr(textureManager)
         , mVao()
-        , mVertexes(GL_ARRAY_BUFFER)
+        , mVertexVBO(GL_ARRAY_BUFFER)
         , mVisFaces(map->mFaces.size())
-        , mVertexData()
+        , mVertIndices()
         , mFaceBatches()
         , mShader()
         , mTextures()
@@ -51,9 +168,6 @@ namespace LambdaCore
                 mTextures.push_back(tex);
             }
         }
-
-        // TODO: remove then lightmap packaging will be done
-        ::glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
         // Calc face data:
         // TODO: func
@@ -101,8 +215,8 @@ namespace LambdaCore
                 glm::i32vec2 bmins, bmaxs;
                 for (uint32_t i = 0; i < 2; i++)
                 {
-                    bmins[i] = floor(mins[i] / LIGHTMAP_SAMPLE_SIZE);
-                    bmaxs[i] = ceil(maxs[i] / LIGHTMAP_SAMPLE_SIZE);
+                    bmins[i] = (int32_t)floor(mins[i] / LIGHTMAP_SAMPLE_SIZE);
+                    bmaxs[i] = (int32_t)ceil(maxs[i] / LIGHTMAP_SAMPLE_SIZE);
 
                     faceData.mMins[i] = bmins[i] * LIGHTMAP_SAMPLE_SIZE;
                     faceData.mExtents[i] = (bmaxs[i] - bmins[i]) * LIGHTMAP_SAMPLE_SIZE;
@@ -117,15 +231,15 @@ namespace LambdaCore
                 // TODO: combine in texture atlas
                 if (face.mLightmapOffset >= 0)
                 {                    
-                    TexturePtr tex(new Texture());
-                    // TODO: 4 lightmaps....
-                    //MAXLIGHTMAPS
-                    tex->setData(0, Texture::FORMAT_RGB, lightmapSize.x, lightmapSize.y, &mMap->mLightmaps[face.mLightmapOffset]);
-                    tex->setFilters(Texture::FILTER_LINEAR, Texture::FILTER_LINEAR);
-                    tex->setWrap(Texture::WRAP_CLAMP, Texture::WRAP_CLAMP);
-                    faceData.mLightmapTex = tex;
-                    // TODO: alloc lightmap in the lightmap manager
-                    //mLightmapMgr.allocLightmap();
+                    // TODO: interpolation in lightmap manager
+                    /*uint32_t LIGHTMAP_MAG_FACTOR = 4;
+                    uint32_t newWidth = lightmapSize.x * LIGHTMAP_MAG_FACTOR;
+                    uint32_t newHeight = lightmapSize.y * LIGHTMAP_MAG_FACTOR;
+                    std::vector<uint8_t> newLightmap(newWidth * newHeight * 3);
+                    BicubicInterpolate(&mMap->mLightmaps[face.mLightmapOffset], lightmapSize.x, lightmapSize.y, 3, &newLightmap[0], newWidth, newHeight);*/
+                    //faceData.mLightmap = mLightmapMgr.allocLightmap(newWidth, newHeight, &newLightmap[0], LIGHTMAP_MAG_FACTOR);
+
+                    faceData.mLightmap = mLightmapMgr.allocLightmap(lightmapSize.x, lightmapSize.y, &mMap->mLightmaps[face.mLightmapOffset], 1);
                 }
             }            
         }
@@ -135,7 +249,8 @@ namespace LambdaCore
 
     void BSPRender::initVBOs()
     {
-        // TODO
+        mVertexVBO.setData(sizeof(glm::vec3) * mMap->mVertices.size(), &mMap->mVertices[0], GL_STATIC_DRAW);
+        // TODO: index buffer
     }
 
     void genLightmapTex()
@@ -143,19 +258,22 @@ namespace LambdaCore
         // TODO
     }
 
+    // TODO: in vbo?
+    #define BUFFER_OFFSET(i) ((void*)(i))
+
     void BSPRender::render(const CameraPtr& camera)
     {
         // Clear visible faces flags
         std::fill(mVisFaces.begin(), mVisFaces.end(), false);
 
         // TODO: not clear, optimize
-        mVertexData.clear();
+        mVertIndices.clear();
         // TODO: pool
         mFaceBatches.clear();
 
         // Check for visible leafs        
         int32_t camLeaf = mMap->getPointLeaf(camera->getTranslation());
-        for (int32_t i = 0; i < mMap->mLeafs.size(); ++i)
+        for (int32_t i = 0; i < (int32_t)mMap->mLeafs.size(); ++i)
         {
             if (mMap->isLeafVisible(camLeaf, i))
             {
@@ -170,11 +288,14 @@ namespace LambdaCore
         
         // Render the results
         {
-            // TODO: load all vertexes in buffer statically
-            ScopeBind bindVertexes(mVertexes); // TODO: static
-            mVertexes.setData(sizeof(VertexData) * mVertexData.size(), &mVertexData[0], GL_STATIC_DRAW);
+            // Some statistic:
+            uint32_t numDiffuseTextureBinds = 0;
+            uint32_t numLightmapTextureBinds = 0;
+            uint32_t numDIPCalls = 0;
+            uint32_t numVertices = 0;
 
-            ScopeBind bind(mVao);
+            // VAO state
+            ScopeBind bind(mVao);            
 
             mShader.use(); // TODO: bind?
 
@@ -185,15 +306,18 @@ namespace LambdaCore
 
             // TODO: disable wrapper?
             glEnableVertexAttribArray(vertexAttributeLocation); // Vertexes
-            mVertexes.bind();
-
-            glVertexAttribPointer(vertexAttributeLocation, 3, GL_FLOAT, GL_FALSE, sizeof(VertexData), NULL);
+            mVertexVBO.bind();
+            ::glVertexAttribPointer(vertexAttributeLocation, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), BUFFER_OFFSET(0));
 
             glm::mat4 camMatrix = camera->getProjection() * camera->getModelview();
             glm::mat4 STATIC_MAP_TRANSFORM = glm::rotate(90.F, -1.F, 0.F, 0.F);
 
             // TODO: models transformations
             mShader.setMVP(camMatrix * STATIC_MAP_TRANSFORM);
+
+            // Texture bind caching
+            Commons::Render::SharedTexturePtr prevTexDiffuse;
+            Commons::Render::Texture* prevTexLightmap = nullptr;
 
             auto it = mFaceBatches.begin();
             const auto itEnd = mFaceBatches.end();
@@ -216,25 +340,43 @@ namespace LambdaCore
                 // TODO: bind wrapper to minimize overhead
                 glActiveTexture(GL_TEXTURE0 + TEXTURE_SAMPLER_DIFFUSE);
                 
-                auto ltmShared = mTextures[texInfo.mMiptex];
-                if (ltmShared)
+                auto texDiffuse = mTextures[texInfo.mMiptex];
+                if (prevTexDiffuse != texDiffuse)
                 {
-                    ltmShared->get().get()->bind();
+                    if (texDiffuse)
+                    {
+                        texDiffuse->get().get()->bind();
+                    }
+                    else
+                    {
+                        ::glBindTexture(GL_TEXTURE_2D, 0); // TODO
+                    }
+                    prevTexDiffuse = texDiffuse;
+                    ++numDiffuseTextureBinds;
                 }
-                                
+                               
                 // Lightmap:
                 glActiveTexture(GL_TEXTURE0 + TEXTURE_SAMPLER_LIGHTMAP);
-                const TexturePtr& lightmap = mFaceData[it->mFaceIndex].mLightmapTex; // TODO: use correct index
-                if (lightmap)
+
+                const LightmapMgr::Lightmap& lightmap = mFaceData[it->mFaceIndex].mLightmap; // TODO: use correct index
+                if (prevTexLightmap != lightmap.mTex)
                 {
-                    lightmap->bind();                
-                }
-                else
-                {
-                    ::glBindTexture(GL_TEXTURE_2D, 0); // TODO
+                    if (lightmap.mTex)
+                    {
+                        lightmap.mTex->bind();
+                    }
+                    else
+                    {
+                        ::glBindTexture(GL_TEXTURE_2D, 0); // TODO
+                    }
+                    prevTexLightmap = lightmap.mTex;
+                    ++numLightmapTextureBinds;
                 }
 
-                // TODO: pack this in single matrix?
+                // TODO: float?
+                uint32_t lightmapSample = LIGHTMAP_SAMPLE_SIZE / lightmap.mMagFactor;
+
+                // TODO: pack this in single matrix, optimize                
                 mShader.setTextureMapping(
                     texInfo.mS,
                     texInfo.mT,
@@ -242,20 +384,20 @@ namespace LambdaCore
                     glm::vec2(texInfo.mSShift, texInfo.mTShift),
                     glm::vec2(tex.mWidth, tex.mHeight),
                     
-                    glm::vec2(texInfo.mSShift - mFaceData[it->mFaceIndex].mMins.x + (LIGHTMAP_SAMPLE_SIZE >> 1),
-                        texInfo.mTShift - mFaceData[it->mFaceIndex].mMins.y + (LIGHTMAP_SAMPLE_SIZE >> 1)
+                    glm::vec2(texInfo.mSShift - mFaceData[it->mFaceIndex].mMins.x + (lightmapSample >> 1) + lightmap.mX * lightmapSample,
+                        texInfo.mTShift - mFaceData[it->mFaceIndex].mMins.y + (lightmapSample >> 1) + lightmap.mY * lightmapSample
                         ),
                     glm::vec2(
-                        ((mFaceData[it->mFaceIndex].mExtents.x / LIGHTMAP_SAMPLE_SIZE) + 1) * LIGHTMAP_SAMPLE_SIZE,
-                        ((mFaceData[it->mFaceIndex].mExtents.y / LIGHTMAP_SAMPLE_SIZE) + 1) * LIGHTMAP_SAMPLE_SIZE
+                        lightmap.mW * lightmapSample,
+                        lightmap.mH * lightmapSample
                         )
                 );
-                
-                // TODO: combine lm in atlas
-                // TODO: static vertex data
+                                
                 // TODO: draw models independently
-                
-                glDrawArrays(GL_TRIANGLE_FAN, it->mStartVertex, it->mNumVertexes);
+                ::glDrawElements(GL_TRIANGLE_FAN, it->mNumIndexes, GL_UNSIGNED_SHORT, &mVertIndices[it->mStartIndex]);
+
+                ++numDIPCalls;
+                numVertices += it->mNumIndexes;
 
                 ++it;
             }
@@ -281,12 +423,6 @@ namespace LambdaCore
         }
     }
 
-    void BSPRender::CalcUV(const BSPMap::BSPTextureInfo& texInfo, VertexData& data, uint32_t width, uint32_t height)
-    {
-        //data.mUV.x = (glm::dot(texInfo.mS, data.mPos) + texInfo.mSShift) / width;
-        //data.mUV.y = (glm::dot(texInfo.mT, data.mPos) + texInfo.mTShift) / height;
-    }
-
     void BSPRender::drawFace(uint32_t faceIndex)
     {
         const BSPMap::BSPFace& face = mMap->mFaces[faceIndex];
@@ -301,15 +437,13 @@ namespace LambdaCore
         batch.mFace = &face;
         // TODO
         batch.mFaceIndex = faceIndex;
-        batch.mStartVertex = mVertexData.size();
+        batch.mStartIndex = mVertIndices.size();
+
         // HACK: quick fix
         if (strncmp(tex.mName, "sky", 3) == 0)
         {
             return;
-        }
-
-        VertexData vertexData;
-        
+        }    
 
         uint16_t startVert = -1;
         uint16_t lastVert = -1;
@@ -332,27 +466,24 @@ namespace LambdaCore
 
             if (i == 0) // First edge, start triangle
             {
-                vertexData.mPos = mMap->mVertices[edgeVerts[0]];
-                //CalcUV(texInfo, vertexData, tex.mWidth, tex.mHeight);
-                mVertexData.push_back(vertexData);
-                startVert = edgeVerts[0];
+                uint16_t vert = edgeVerts[0];
+                startVert = vert;
+                mVertIndices.push_back(vert);                
             }
             else
             {
                 assert(edgeVerts[0] == lastVert);
             }
 
-            vertexData.mPos = mMap->mVertices[edgeVerts[1]];
-            //CalcUV(texInfo, vertexData, tex.mWidth, tex.mHeight);
-            mVertexData.push_back(vertexData);
-
-            lastVert = edgeVerts[1];
+            uint16_t vert = edgeVerts[1];
+            lastVert = vert;
+            mVertIndices.push_back(vert); // TODO: add not push
         }
 
         assert(lastVert == startVert);
         // TODO: close poly if needed
 
-        batch.mNumVertexes = mVertexData.size() - batch.mStartVertex;
+        batch.mNumIndexes = mVertIndices.size() - batch.mStartIndex;
         mFaceBatches.push_back(batch);
     }
 }

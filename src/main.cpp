@@ -80,10 +80,6 @@ int main(int argc, char **argv)
     
 
     Commons::Render::RenderNodePtr rootNode(new Commons::Render::RenderNode("root"));
-    
-    BSPRender mapRender(map, textureMgr);
-    //Commons::Render::RenderNodePtr mapNode(new BSPMapRender(map));
-    //rootNode->attachChild(mapNode);
 
     // TODO: dbg
     ::glEnable(GL_BLEND);
@@ -96,7 +92,13 @@ int main(int argc, char **argv)
     ::glEnable(GL_CULL_FACE);
     ::glFrontFace(GL_CW); // TODO: invert faces then building model?
 
+                          // TODO: remove then lightmap packaging will be done
+    ::glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     
+    BSPRender mapRender(map, textureMgr);
+    //Commons::Render::RenderNodePtr mapNode(new BSPMapRender(map));
+    //rootNode->attachChild(mapNode);
+        
     double oldTime = window.getCurTime();
     while (window.tick())
     {

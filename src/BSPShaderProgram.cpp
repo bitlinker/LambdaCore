@@ -18,6 +18,8 @@ namespace LambdaCore
         "  vec4 color = texture(u_texDiffuse, v_uvTexture);"
         "  vec4 lightmap = texture(u_texLightmap, v_uvLightmap);"
         "  vec4 value = color * lightmap * u_lightness * 1.2 + 0.1;"
+        //"  vec4 value = lightmap;" // DBG
+        //"  vec4 value = color + 0.2;" // DBG
         "  frag_colour.rgb = value.rgb;"
         "  frag_colour.a = color.a;"
         "  frag_colour.a = frag_colour.a > 0.5 ? 1.0 : 0.0;" // Alpha test        

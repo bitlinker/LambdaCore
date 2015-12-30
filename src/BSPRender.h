@@ -17,13 +17,13 @@ namespace LambdaCore
     private:
         struct VertexData
         {
-            glm::vec3 mPos;            
+            uint32_t mVertIndex;
         };
 
         struct FaceBatch
         {
-            uint32_t mStartVertex;
-            uint32_t mNumVertexes;
+            uint32_t mStartIndex;
+            uint32_t mNumIndexes;
             const BSPMap::BSPFace* mFace;
             uint32_t mFaceIndex;
         };
@@ -32,7 +32,7 @@ namespace LambdaCore
         {
             glm::i32vec2 mMins; // TODO: if needed
             glm::i32vec2 mExtents;
-            Commons::Render::TexturePtr mLightmapTex;
+            LightmapMgr::Lightmap mLightmap;
         };
 
     public:
@@ -46,9 +46,6 @@ namespace LambdaCore
 
         void initVBOs();
 
-        // TODO: rm
-        static void CalcUV(const BSPMap::BSPTextureInfo& texInfo, VertexData& data, uint32_t width, uint32_t height);
-
         void drawLeaf(const BSPMap::BSPLeaf& leaf);
         void drawFace(uint32_t faceIndex);
 
@@ -58,14 +55,13 @@ namespace LambdaCore
         Commons::Render::SharedTextureMgrPtr mTexMgr;
 
         Commons::Render::VertexArrayObject mVao;
-        Commons::Render::BufferObject mVertexes;
+        Commons::Render::BufferObject mVertexVBO;
 
         // Visible faces
         std::vector<bool> mVisFaces;
 
         // Output render data for rendering face
-        // TODO: textures
-        std::vector<VertexData> mVertexData;
+        std::vector<uint16_t> mVertIndices;
         std::vector<FaceBatch> mFaceBatches;
 
         BSPShaderProgram mShader;
