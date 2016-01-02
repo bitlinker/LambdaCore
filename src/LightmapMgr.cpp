@@ -11,10 +11,9 @@ namespace LambdaCore
         , mLightmap(new Texture())
         , mAllocVBorder(mgr->mBlockWidth)
     {
-        // TODO: default lightmap color???
         mLightmap->setFilters(Texture::FILTER_LINEAR, Texture::FILTER_LINEAR);
         mLightmap->setWrap(Texture::WRAP_CLAMP, Texture::WRAP_CLAMP);
-        mLightmap->setData(0, Texture::FORMAT_RGB, mgr->mBlockWidth, mgr->mBlockHeight, nullptr); // Prealloc texture data
+        mLightmap->setData(0, Texture::FORMAT_RGB, mgr->mBlockWidth, mgr->mBlockHeight, nullptr); // Preallocate texture data
     }
 
     LightmapMgr::LightmapMgr(uint32_t blockSize, uint32_t numBlocks)
@@ -23,7 +22,11 @@ namespace LambdaCore
         , mBlocks()
         , mPadding(1)
     {
-        // TODO: prealloc blocks?
+        mBlocks.reserve(numBlocks);
+        for (uint32_t i = 0; i < numBlocks; ++i)
+        {
+            mBlocks.push_back(Block(this));
+        }
     }
 
     LightmapMgr::~LightmapMgr()
@@ -32,7 +35,6 @@ namespace LambdaCore
 
     const LightmapMgr::Block* LightmapMgr::calcPlaceForLightmap(uint32_t width, uint32_t height, uint32_t& x, uint32_t& y)
     {
-        // TODO: check if w & h > block here?...
         assert(width <= mBlockWidth);
         assert(height <= mBlockHeight);
 

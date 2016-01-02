@@ -145,7 +145,7 @@ namespace LambdaCore
     Beware that sky textures are made of two distinct parts.*/
 
     BSPRender::BSPRender(const BSPMapPtr& map, const Commons::Render::SharedTextureMgrPtr& textureManager)
-        : mLightmapMgr(512, 64)
+        : mLightmapMgr(256, 128)
         , mMap(map)
         , mTexMgr(textureManager)
         , mVao()
@@ -253,7 +253,7 @@ namespace LambdaCore
 
         // TODO: func
         mModelData.resize(mMap->mModels.size());
-
+        
         mModelData[0].mIsVisible = true;
         mModelData[1].mIsVisible = true;
     }
@@ -269,52 +269,116 @@ namespace LambdaCore
         // TODO
     }
 
-    void BSPRender::drawNodeRecursive(int32_t nodeIndex, int32_t mdlIndex)
-    {
-        // TODO: translate camera to model space
+    void BSPRender::renderModel(const glm::mat4& matrix)
+    {        
+        // TODO: sort leafs or faces?
+        // Some statistic:
+        uint32_t numDiffuseTextureBinds = 0;
+        uint32_t numLightmapTextureBinds = 0;
+        uint32_t numDIPCalls = 0;
+        uint32_t numVertices = 0;
 
-        //const BSPMap::BSPModel& mdl = mMap->mModels[mdlIndex];
-        //const ModelData& mdlData = mModelData[mdlIndex];
+        // VAO state
+        ScopeBind bind(mVao);
 
-        //while (true)
-        //{
-        //    
-        //    // 
-        //}
+        mShader.use(); // TODO: bind?
 
-        //if (nodeIndex > 0)
-        //{
-        //    const BSPMap::BSPNode& node = mMap->mNodes[nodeIndex];
+        mShader.setMVP(matrix);
 
-        //    // TODO: AABB check
-        //    //    const float dist = getPlaneDist(&mPlanes[curNode->mPlaneIndex], point);
+        mShader.setTexDiffuseSampler(TEXTURE_SAMPLER_DIFFUSE);
+        mShader.setTexLightmapSampler(TEXTURE_SAMPLER_LIGHTMAP);
 
-        //    node.mChildren;
+        uint32_t vertexAttributeLocation = mShader.getVertexPositionLocation();
 
-        //}
-        //else
-        //{
-        //    int leafIndex = -nodeIndex - 1;
-        //}
+        // TODO: disable wrapper?
+        glEnableVertexAttribArray(vertexAttributeLocation); // Vertexes
+        mVertexVBO.bind();
+        ::glVertexAttribPointer(vertexAttributeLocation, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), BufferObject::BUFFER_OFFSET(0));
 
+        // Texture bind caching
+        Commons::Render::SharedTexturePtr prevTexDiffuse;
+        Commons::Render::Texture* prevTexLightmap = nullptr;
 
+        auto it = mFaceBatches.begin();
+        const auto itEnd = mFaceBatches.end();
+        while (it != itEnd)
+        {
+            // Configure lighting:
+            const BSPMap::BSPPlane& plane = mMap->mPlanes[it->mFace->mPlane];
+            glm::vec3 normal = it->mFace->mPlaneSide == 0 ? plane.mNormal : -plane.mNormal;
+            mShader.setNormal(normal);
 
-        //const BSPMap::BSPNode* curNode = &mMap->mNodes[nodeIndex];
-        //while (true)
-        //{
-        //    const float dist = getPlaneDist(&mPlanes[curNode->mPlaneIndex], point);
-        //    int32_t nextNode = curNode->mChildren[dist > 0.F ? 0 : 1];
-        //    if (nextNode < 0)
-        //    {
-        //        return -nextNode - 1; // Found!                
-        //    }
-        //    curNode = &mNodes[nextNode];
-        //}
+            //face.mTypelight // TODO: lighting types
+            float lightness = it->mFace->mBaselight / 255.F;
+            mShader.setLightness(lightness);
 
-        //if (nodeIndex)
+            // Configure texture mapping
+            const BSPMap::BSPTextureInfo& texInfo = mMap->mTexInfo[it->mFace->mTextureInfo];
+            const BSPMap::BSPMipTex& tex = mMap->mMipTextures[texInfo.mMiptex];
 
-        //// TODO
-        
+            // TODO: bind wrapper to minimize overhead
+            glActiveTexture(GL_TEXTURE0 + TEXTURE_SAMPLER_DIFFUSE);
+
+            auto texDiffuse = mTextures[texInfo.mMiptex];
+            if (prevTexDiffuse != texDiffuse)
+            {
+                if (texDiffuse)
+                {
+                    texDiffuse->get().get()->bind();
+                }
+                else
+                {
+                    ::glBindTexture(GL_TEXTURE_2D, 0); // TODO
+                }
+                prevTexDiffuse = texDiffuse;
+                ++numDiffuseTextureBinds;
+            }
+
+            // Lightmap:
+            glActiveTexture(GL_TEXTURE0 + TEXTURE_SAMPLER_LIGHTMAP);
+
+            const LightmapMgr::Lightmap& lightmap = mFaceData[it->mFaceIndex].mLightmap; // TODO: use correct index
+            if (prevTexLightmap != lightmap.mTex)
+            {
+                if (lightmap.mTex)
+                {
+                    lightmap.mTex->bind();
+                }
+                else
+                {
+                    ::glBindTexture(GL_TEXTURE_2D, 0); // TODO
+                }
+                prevTexLightmap = lightmap.mTex;
+                ++numLightmapTextureBinds;
+            }
+
+            // TODO: float?
+            uint32_t lightmapSample = LIGHTMAP_SAMPLE_SIZE / lightmap.mMagFactor;
+
+            // TODO: pack this in single matrix, optimize                
+            mShader.setTextureMapping(
+                texInfo.mS,
+                texInfo.mT,
+
+                glm::vec2(texInfo.mSShift, texInfo.mTShift),
+                glm::vec2(tex.mWidth, tex.mHeight),
+
+                glm::vec2(texInfo.mSShift - mFaceData[it->mFaceIndex].mMins.x + (lightmapSample >> 1) + lightmap.mX * lightmapSample,
+                    texInfo.mTShift - mFaceData[it->mFaceIndex].mMins.y + (lightmapSample >> 1) + lightmap.mY * lightmapSample
+                    ),
+                glm::vec2(
+                    lightmap.mW * lightmapSample,
+                    lightmap.mH * lightmapSample
+                    )
+                );
+
+            ::glDrawElements(GL_TRIANGLE_FAN, it->mNumIndexes, GL_UNSIGNED_SHORT, &mVertIndices[it->mStartIndex]);
+
+            ++numDIPCalls;
+            numVertices += it->mNumIndexes;
+
+            ++it;
+        }
     }
 
     void BSPRender::render(const CameraPtr& camera)
@@ -327,45 +391,35 @@ namespace LambdaCore
 
         // TODO: not clear, optimize
         mVertIndices.clear();
-        // TODO: pool
-        mFaceBatches.clear();
 
         // Check for visible leafs
         // TODO: in bsp renderer
         glm::vec4 pos = glm::vec4(camera->getTranslation(), 1.F);
         pos = glm::inverse(STATIC_MAP_TRANSFORM) * pos;
+        printf("Pos: %f, %f, %f\n", pos.x, pos.y, pos.z);
 
         glm::mat4 camMatrix = camera->getMatrix() * STATIC_MAP_TRANSFORM;
         Frustum frustum(camMatrix); // Camera frustum in BSP map space
-        
+
         //int32_t camLeaf = mMap->getPointLeaf(glm::vec3(pos));
         //LOG_DEBUG("Leaf: %d", camLeaf);
-        
+
         //mMap->fillVisLeafs(camLeaf, mVisLeafs);
 
-
-        //// Draw all models:
-        //auto itMdl = mModelData.begin();
-        //auto itMdlEnd = mModelData.end();
-        //for (uint32_t mdlIndex = 0; mdlIndex < mMap->mModels.size(); ++mdlIndex)
+        // DBG: move models a little
         //{
-        //    const BSPMap::BSPModel& mdl = mMap->mModels[mdlIndex];
-        //    const ModelData& mdlData = mModelData[mdlIndex];
-
-        //    if (!mdlData.mIsVisible) 
+        //    auto it = mModelData.begin();
+        //    auto itEnd = mModelData.end();
+        //    for (; it != itEnd; ++it)
         //    {
-        //        continue;
+        //        it->mIsVisible = true;
+        //        if (it != mModelData.begin())
+        //            it->mTranslation = glm::rotate(15 * sin(GetTickCount() * 0.001F), glm::vec3(0, 1, 0));
         //    }
-
-        //    // TODO: check if faces are visible
-        //    for (int32_t faceIndex = 0; faceIndex < mdl.mNumFaces; ++faceIndex)
-        //    {
-        //        drawFace(mdl.mFirstFace + faceIndex);
-        //    }
-        //    
-        //    //drawNodeRecursive(mdl.mHeadnodes[0], mdlIndex); // TODO: check other nodes, not only 0...
         //}
 
+
+        // Cull visible leafs:
         uint32_t cnt = 0, totalCnt = 0;
         for (int32_t i = 0; i < (int32_t)mMap->mLeafs.size(); ++i)
         {
@@ -383,128 +437,43 @@ namespace LambdaCore
         }
         //printf("Vis leafs: %d, total: %d\n", cnt, totalCnt);
 
-        // TODO: sort leafs or faces?
-        // Render the results
+        // Draw all models using currently visible leafs:
+        auto itMdl = mModelData.begin();
+        auto itMdlEnd = mModelData.end();
+        for (uint32_t mdlIndex = 0; mdlIndex < mMap->mModels.size(); ++mdlIndex)
         {
-            // Some statistic:
-            uint32_t numDiffuseTextureBinds = 0;
-            uint32_t numLightmapTextureBinds = 0;
-            uint32_t numDIPCalls = 0;
-            uint32_t numVertices = 0;
+            const BSPMap::BSPModel& mdl = mMap->mModels[mdlIndex];
+            const ModelData& mdlData = mModelData[mdlIndex];
 
-            // VAO state
-            ScopeBind bind(mVao);            
-
-            mShader.use(); // TODO: bind?
-
-            // TODO: models transformations
-            mShader.setMVP(camMatrix);
-
-            mShader.setTexDiffuseSampler(TEXTURE_SAMPLER_DIFFUSE);
-            mShader.setTexLightmapSampler(TEXTURE_SAMPLER_LIGHTMAP);
-
-            uint32_t vertexAttributeLocation = mShader.getVertexPositionLocation();
-
-            // TODO: disable wrapper?
-            glEnableVertexAttribArray(vertexAttributeLocation); // Vertexes
-            mVertexVBO.bind();
-            ::glVertexAttribPointer(vertexAttributeLocation, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), BufferObject::BUFFER_OFFSET(0));            
-
-            // Texture bind caching
-            Commons::Render::SharedTexturePtr prevTexDiffuse;
-            Commons::Render::Texture* prevTexLightmap = nullptr;
-
-            auto it = mFaceBatches.begin();
-            const auto itEnd = mFaceBatches.end();
-            while (it != itEnd)
+            if (!mdlData.mIsVisible)
             {
-                // TODO: funcs
-                // Configure lighting:
-                const BSPMap::BSPPlane& plane = mMap->mPlanes[it->mFace->mPlane];
-                glm::vec3 normal = it->mFace->mPlaneSide == 0 ? plane.mNormal : -plane.mNormal;
-                mShader.setNormal(normal);
-
-                //face.mTypelight // TODO: lighting types
-                float lightness = it->mFace->mBaselight / 255.F;
-                mShader.setLightness(lightness);
-                
-                // Configure texture mapping
-                const BSPMap::BSPTextureInfo& texInfo = mMap->mTexInfo[it->mFace->mTextureInfo];
-                const BSPMap::BSPMipTex& tex = mMap->mMipTextures[texInfo.mMiptex];
-                
-                // TODO: bind wrapper to minimize overhead
-                glActiveTexture(GL_TEXTURE0 + TEXTURE_SAMPLER_DIFFUSE);
-                
-                auto texDiffuse = mTextures[texInfo.mMiptex];
-                if (prevTexDiffuse != texDiffuse)
-                {
-                    if (texDiffuse)
-                    {
-                        texDiffuse->get().get()->bind();
-                    }
-                    else
-                    {
-                        ::glBindTexture(GL_TEXTURE_2D, 0); // TODO
-                    }
-                    prevTexDiffuse = texDiffuse;
-                    ++numDiffuseTextureBinds;
-                }
-                               
-                // Lightmap:
-                glActiveTexture(GL_TEXTURE0 + TEXTURE_SAMPLER_LIGHTMAP);
-
-                const LightmapMgr::Lightmap& lightmap = mFaceData[it->mFaceIndex].mLightmap; // TODO: use correct index
-                if (prevTexLightmap != lightmap.mTex)
-                {
-                    if (lightmap.mTex)
-                    {
-                        lightmap.mTex->bind();
-                    }
-                    else
-                    {
-                        ::glBindTexture(GL_TEXTURE_2D, 0); // TODO
-                    }
-                    prevTexLightmap = lightmap.mTex;
-                    ++numLightmapTextureBinds;
-                }
-
-                // TODO: float?
-                uint32_t lightmapSample = LIGHTMAP_SAMPLE_SIZE / lightmap.mMagFactor;
-
-                // TODO: pack this in single matrix, optimize                
-                mShader.setTextureMapping(
-                    texInfo.mS,
-                    texInfo.mT,
-
-                    glm::vec2(texInfo.mSShift, texInfo.mTShift),
-                    glm::vec2(tex.mWidth, tex.mHeight),
-                    
-                    glm::vec2(texInfo.mSShift - mFaceData[it->mFaceIndex].mMins.x + (lightmapSample >> 1) + lightmap.mX * lightmapSample,
-                        texInfo.mTShift - mFaceData[it->mFaceIndex].mMins.y + (lightmapSample >> 1) + lightmap.mY * lightmapSample
-                        ),
-                    glm::vec2(
-                        lightmap.mW * lightmapSample,
-                        lightmap.mH * lightmapSample
-                        )
-                );
-                                
-                // TODO: draw models independently
-                ::glDrawElements(GL_TRIANGLE_FAN, it->mNumIndexes, GL_UNSIGNED_SHORT, &mVertIndices[it->mStartIndex]);
-
-                ++numDIPCalls;
-                numVertices += it->mNumIndexes;
-
-                ++it;
+                continue;
             }
-        }
+
+            // TODO: pool
+            mFaceBatches.clear();
+
+            for (int32_t faceIndex = 0; faceIndex < mdl.mNumFaces; ++faceIndex)
+            {                
+                int32_t index = mdl.mFirstFace + faceIndex;
+                if (mVisFaces[index])
+                {
+                    drawFace(index);
+                }
+            }          
+            
+            // Calculate model matrix based on origin & translation
+            glm::mat4 mdlMatrix = camMatrix * glm::translate(mdl.mOrigin) * mdlData.mTranslation * glm::translate(-mdl.mOrigin);
+            renderModel(mdlMatrix);
+        }        
     }
 
     void BSPRender::drawLeaf(const BSPMap::BSPLeaf& leaf)
     {     
-        if (leaf.mContents == BSPMap::CONTENTS_CLIP)
+        /*if (leaf.mContents == BSPMap::CONTENTS_CLIP)
             return;
         if (leaf.mContents == BSPMap::CONTENTS_SKY)
-            return;
+            return;*/
         //leaf.mContents; // TODO: check for other content
 
         for (uint16_t i = 0; i < leaf.mNumMarkSurfaces; ++i)
@@ -512,7 +481,6 @@ namespace LambdaCore
             uint16_t faceIndex = mMap->mMarkSurfaces[leaf.mFirstMarkSurface + i];
             if (!mVisFaces[faceIndex])
             {
-                drawFace(faceIndex); // TODO: sorting
                 mVisFaces[faceIndex] = true;
             }
         }

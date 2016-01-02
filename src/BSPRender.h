@@ -56,7 +56,7 @@ namespace LambdaCore
         void drawLeaf(const BSPMap::BSPLeaf& leaf);
         void drawFace(uint32_t faceIndex);
 
-        void drawNodeRecursive(int32_t nodeIndex, int32_t mdlIndex);
+        void renderModel(const glm::mat4& matrix);
 
     private:
         LightmapMgr mLightmapMgr;
