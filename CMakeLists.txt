@@ -24,6 +24,8 @@ set(BITLINKER_COMMONS_SOURCES
     BitlinkerCommons/Render/BufferObject.h
     BitlinkerCommons/Render/Camera.h
     BitlinkerCommons/Render/Camera.cpp
+    BitlinkerCommons/Render/Frustum.h
+    BitlinkerCommons/Render/Frustum.cpp
     BitlinkerCommons/Render/IBindable.h    
     BitlinkerCommons/Render/RenderCommon.h
     BitlinkerCommons/Render/GLContext.h

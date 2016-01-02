@@ -7,8 +7,7 @@
 #include <Render/BufferObject.h>
 #include <Render/ScopeBind.h>
 #include <BSPShaderProgram.h>
-
-#include <Common/Singleton.h>
+#include <Logger/Log.h>
 
 using namespace Commons;
 using namespace Commons::Render;
@@ -137,6 +136,8 @@ namespace LambdaCore
     static const uint32_t TEXTURE_SAMPLER_DIFFUSE = 0;
     static const uint32_t TEXTURE_SAMPLER_LIGHTMAP = 1;
 
+    static const glm::mat4 STATIC_MAP_TRANSFORM = glm::rotate(90.F, -1.F, 0.F, 0.F);
+
     // TODO: animation - in render
     /*if it begins by * it will be animated like lava or water.
     if it begins by + then it will be animated with frames, and the second letter of the name will be the frame number.Those numbers begin at 0, and go up to 9 at the maximum.
@@ -144,11 +145,12 @@ namespace LambdaCore
     Beware that sky textures are made of two distinct parts.*/
 
     BSPRender::BSPRender(const BSPMapPtr& map, const Commons::Render::SharedTextureMgrPtr& textureManager)
-        : mLightmapMgr(128, 64)
+        : mLightmapMgr(512, 64)
         , mMap(map)
         , mTexMgr(textureManager)
         , mVao()
         , mVertexVBO(GL_ARRAY_BUFFER)
+        , mVisLeafs()
         , mVisFaces(map->mFaces.size())
         , mVertIndices()
         , mFaceBatches()
@@ -157,6 +159,9 @@ namespace LambdaCore
         , mFaceData()
         // TODO: init members
     {
+        // Preinit vis leaves
+        mVisLeafs.resize(map->mLeafs.size());
+
         // Load textures:
         // TODO: func
         {
@@ -236,8 +241,8 @@ namespace LambdaCore
                     uint32_t newWidth = lightmapSize.x * LIGHTMAP_MAG_FACTOR;
                     uint32_t newHeight = lightmapSize.y * LIGHTMAP_MAG_FACTOR;
                     std::vector<uint8_t> newLightmap(newWidth * newHeight * 3);
-                    BicubicInterpolate(&mMap->mLightmaps[face.mLightmapOffset], lightmapSize.x, lightmapSize.y, 3, &newLightmap[0], newWidth, newHeight);*/
-                    //faceData.mLightmap = mLightmapMgr.allocLightmap(newWidth, newHeight, &newLightmap[0], LIGHTMAP_MAG_FACTOR);
+                    BicubicInterpolate(&mMap->mLightmaps[face.mLightmapOffset], lightmapSize.x, lightmapSize.y, 3, &newLightmap[0], newWidth, newHeight);
+                    faceData.mLightmap = mLightmapMgr.allocLightmap(newWidth, newHeight, &newLightmap[0], LIGHTMAP_MAG_FACTOR);*/
 
                     faceData.mLightmap = mLightmapMgr.allocLightmap(lightmapSize.x, lightmapSize.y, &mMap->mLightmaps[face.mLightmapOffset], 1);
                 }
@@ -245,12 +250,18 @@ namespace LambdaCore
         }
 
         initVBOs();
+
+        // TODO: func
+        mModelData.resize(mMap->mModels.size());
+
+        mModelData[0].mIsVisible = true;
+        mModelData[1].mIsVisible = true;
     }
 
     void BSPRender::initVBOs()
     {
         mVertexVBO.setData(sizeof(glm::vec3) * mMap->mVertices.size(), &mMap->mVertices[0], GL_STATIC_DRAW);
-        // TODO: index buffer
+        // TODO: index buffer?
     }
 
     void genLightmapTex()
@@ -258,11 +269,59 @@ namespace LambdaCore
         // TODO
     }
 
-    // TODO: in vbo?
-    #define BUFFER_OFFSET(i) ((void*)(i))
+    void BSPRender::drawNodeRecursive(int32_t nodeIndex, int32_t mdlIndex)
+    {
+        // TODO: translate camera to model space
+
+        //const BSPMap::BSPModel& mdl = mMap->mModels[mdlIndex];
+        //const ModelData& mdlData = mModelData[mdlIndex];
+
+        //while (true)
+        //{
+        //    
+        //    // 
+        //}
+
+        //if (nodeIndex > 0)
+        //{
+        //    const BSPMap::BSPNode& node = mMap->mNodes[nodeIndex];
+
+        //    // TODO: AABB check
+        //    //    const float dist = getPlaneDist(&mPlanes[curNode->mPlaneIndex], point);
+
+        //    node.mChildren;
+
+        //}
+        //else
+        //{
+        //    int leafIndex = -nodeIndex - 1;
+        //}
+
+
+
+        //const BSPMap::BSPNode* curNode = &mMap->mNodes[nodeIndex];
+        //while (true)
+        //{
+        //    const float dist = getPlaneDist(&mPlanes[curNode->mPlaneIndex], point);
+        //    int32_t nextNode = curNode->mChildren[dist > 0.F ? 0 : 1];
+        //    if (nextNode < 0)
+        //    {
+        //        return -nextNode - 1; // Found!                
+        //    }
+        //    curNode = &mNodes[nextNode];
+        //}
+
+        //if (nodeIndex)
+
+        //// TODO
+        
+    }
 
     void BSPRender::render(const CameraPtr& camera)
     {
+        // TODO: cleared by PVS
+        //std::fill(mVisLeafs.begin(), mVisLeafs.end(), false);
+
         // Clear visible faces flags
         std::fill(mVisFaces.begin(), mVisFaces.end(), false);
 
@@ -271,21 +330,60 @@ namespace LambdaCore
         // TODO: pool
         mFaceBatches.clear();
 
-        // Check for visible leafs        
-        int32_t camLeaf = mMap->getPointLeaf(camera->getTranslation());
+        // Check for visible leafs
+        // TODO: in bsp renderer
+        glm::vec4 pos = glm::vec4(camera->getTranslation(), 1.F);
+        pos = glm::inverse(STATIC_MAP_TRANSFORM) * pos;
+
+        glm::mat4 camMatrix = camera->getMatrix() * STATIC_MAP_TRANSFORM;
+        Frustum frustum(camMatrix); // Camera frustum in BSP map space
+        
+        //int32_t camLeaf = mMap->getPointLeaf(glm::vec3(pos));
+        //LOG_DEBUG("Leaf: %d", camLeaf);
+        
+        //mMap->fillVisLeafs(camLeaf, mVisLeafs);
+
+
+        //// Draw all models:
+        //auto itMdl = mModelData.begin();
+        //auto itMdlEnd = mModelData.end();
+        //for (uint32_t mdlIndex = 0; mdlIndex < mMap->mModels.size(); ++mdlIndex)
+        //{
+        //    const BSPMap::BSPModel& mdl = mMap->mModels[mdlIndex];
+        //    const ModelData& mdlData = mModelData[mdlIndex];
+
+        //    if (!mdlData.mIsVisible) 
+        //    {
+        //        continue;
+        //    }
+
+        //    // TODO: check if faces are visible
+        //    for (int32_t faceIndex = 0; faceIndex < mdl.mNumFaces; ++faceIndex)
+        //    {
+        //        drawFace(mdl.mFirstFace + faceIndex);
+        //    }
+        //    
+        //    //drawNodeRecursive(mdl.mHeadnodes[0], mdlIndex); // TODO: check other nodes, not only 0...
+        //}
+
+        uint32_t cnt = 0, totalCnt = 0;
         for (int32_t i = 0; i < (int32_t)mMap->mLeafs.size(); ++i)
         {
-            if (mMap->isLeafVisible(camLeaf, i))
+            //if (mVisLeafs[i])
             {
                 const BSPMap::BSPLeaf& leaf = mMap->mLeafs[i];
                 AABB aabb(leaf.mMins, leaf.mMaxs);
-                if (camera->isInFrustum(aabb))
+                if (frustum.isInFrustum(aabb))
                 {
                     drawLeaf(leaf);
+                    ++cnt;
                 }
+                ++totalCnt;
             }
         }
-        
+        //printf("Vis leafs: %d, total: %d\n", cnt, totalCnt);
+
+        // TODO: sort leafs or faces?
         // Render the results
         {
             // Some statistic:
@@ -299,6 +397,9 @@ namespace LambdaCore
 
             mShader.use(); // TODO: bind?
 
+            // TODO: models transformations
+            mShader.setMVP(camMatrix);
+
             mShader.setTexDiffuseSampler(TEXTURE_SAMPLER_DIFFUSE);
             mShader.setTexLightmapSampler(TEXTURE_SAMPLER_LIGHTMAP);
 
@@ -307,13 +408,7 @@ namespace LambdaCore
             // TODO: disable wrapper?
             glEnableVertexAttribArray(vertexAttributeLocation); // Vertexes
             mVertexVBO.bind();
-            ::glVertexAttribPointer(vertexAttributeLocation, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), BUFFER_OFFSET(0));
-
-            glm::mat4 camMatrix = camera->getProjection() * camera->getModelview();
-            glm::mat4 STATIC_MAP_TRANSFORM = glm::rotate(90.F, -1.F, 0.F, 0.F);
-
-            // TODO: models transformations
-            mShader.setMVP(camMatrix * STATIC_MAP_TRANSFORM);
+            ::glVertexAttribPointer(vertexAttributeLocation, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), BufferObject::BUFFER_OFFSET(0));            
 
             // Texture bind caching
             Commons::Render::SharedTexturePtr prevTexDiffuse;
@@ -430,11 +525,10 @@ namespace LambdaCore
 
         const BSPMap::BSPTextureInfo& texInfo = mMap->mTexInfo[face.mTextureInfo];
 
-        // TODO: calc UV in shader?
-        // TODO: set texture and lightmap        
-        //face.mLightmapOffset;
         const BSPMap::BSPMipTex& tex = mMap->mMipTextures[texInfo.mMiptex];
         batch.mFace = &face;
+
+
         // TODO
         batch.mFaceIndex = faceIndex;
         batch.mStartIndex = mVertIndices.size();

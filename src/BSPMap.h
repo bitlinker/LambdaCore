@@ -166,6 +166,7 @@ namespace LambdaCore
         // Collision detection
         float getPlaneDist(const BSPPlane* plane, const glm::vec3& point) const;
         bool isLeafVisible(int32_t fromLeafIndex, int32_t testLeafIndex) const;
+        void fillVisLeafs(int32_t fromLeafIndex, std::vector<bool>& visLeafs) const;
 
     private:
         // TODO: stream reader?
@@ -202,7 +203,7 @@ namespace LambdaCore
         std::vector<BSPMipTex> mMipTextures;
         std::vector<BSPPlane> mPlanes;
         std::vector<glm::vec3> mVertices;
-        std::vector<uint8_t> mDecodedVIS; // TODO
+        std::vector<uint8_t> mCompressedVis;
         std::vector<BSPNode> mNodes;
         std::vector<BSPTextureInfo> mTexInfo;
         std::vector<BSPFace> mFaces;

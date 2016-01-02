@@ -15,24 +15,31 @@ namespace LambdaCore
     class BSPRender
     {
     private:
-        struct VertexData
+        class FaceBatch
         {
-            uint32_t mVertIndex;
-        };
-
-        struct FaceBatch
-        {
+        public:
             uint32_t mStartIndex;
             uint32_t mNumIndexes;
             const BSPMap::BSPFace* mFace;
             uint32_t mFaceIndex;
         };
 
-        struct FaceData
+        class FaceData
         {
+        public:
             glm::i32vec2 mMins; // TODO: if needed
             glm::i32vec2 mExtents;
             LightmapMgr::Lightmap mLightmap;
+        };
+
+        class ModelData
+        {
+        public:
+            ModelData() : mIsVisible(false) {}
+
+        public:
+            glm::mat4 mTranslation;
+            bool mIsVisible;
         };
 
     public:
@@ -49,6 +56,8 @@ namespace LambdaCore
         void drawLeaf(const BSPMap::BSPLeaf& leaf);
         void drawFace(uint32_t faceIndex);
 
+        void drawNodeRecursive(int32_t nodeIndex, int32_t mdlIndex);
+
     private:
         LightmapMgr mLightmapMgr;
         BSPMapPtr mMap;
@@ -56,6 +65,9 @@ namespace LambdaCore
 
         Commons::Render::VertexArrayObject mVao;
         Commons::Render::BufferObject mVertexVBO;
+
+        // Visible leaves
+        std::vector<bool> mVisLeafs;
 
         // Visible faces
         std::vector<bool> mVisFaces;
@@ -66,8 +78,9 @@ namespace LambdaCore
 
         BSPShaderProgram mShader;
 
+        // Precomputed data for map rendering & state adjusting
         std::vector<Commons::Render::SharedTexturePtr> mTextures;
-
         std::vector<FaceData> mFaceData;
+        std::vector<ModelData> mModelData; // TODO: move to map itself?
     };
 }

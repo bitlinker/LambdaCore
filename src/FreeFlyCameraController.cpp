@@ -24,7 +24,7 @@ namespace LambdaCore
 
     void FreeFlyCameraController::update(float delta)
     {
-        static const float SPEED = 600.F;
+        static const float SPEED = 320.F;
         static const float ANG_SPEED = 1.5F;
 
         // Translation:

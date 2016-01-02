@@ -57,7 +57,9 @@ int main(int argc, char **argv)
     BSPMapPtr map = std::make_shared<BSPMap>(strm_map);
 
     Commons::Render::CameraPtr camera(new Commons::Render::Camera());
-    camera->setPerspective(45.F, 16.F / 9.F, 10000.F, 0.1F);
+    camera->setPerspective(45.F, 16.F / 9.F, 10240.F, 16.0F); // TODO: configure to eliminate z-fighting
+
+    //bool check = camera->getFrustum().isInFrustum(glm::vec3(0, 0, -50), 1);
     
     // TODO: in bsp renderer
     glm::mat4 STATIC_MAP_TRANSFORM = glm::rotate(90.F, -1.F, 0.F, 0.F);

@@ -100,48 +100,9 @@ namespace LambdaCore
         readTypedVec(LUMP_VERTICES, stream, mVertices);
     }
 
-    static void DecodePVS(const uint8_t* src, uint8_t* dst, uint32_t numClusters)
-    {
-        const uint8_t* curPos = src;
-        for (uint32_t i = 0; i < numClusters;)
-        {
-            uint8_t curByte = *curPos++;
-            if (curByte == 0)
-            {
-                uint32_t numSkip = *curPos++;
-                for (uint32_t j = 0; j < numSkip; ++j)
-                    *dst++ = 0;
-                i += numSkip;
-            }
-            else
-            {
-                *dst++ = curByte;
-                ++i;
-            }
-        }
-    }
-
     void BSPMap::readVIS(const Commons::IOStreamPtr stream)
     {
-        const uint32_t len = getLumpSize(LUMP_VISIBILITY);
-        if (len > 0)
-        {
-            stream->seek(getLumpOffset(LUMP_VISIBILITY), IOStream::ORIGIN_SET);
-            // TODO: decode lumps
-            uint32_t numClusters;
-            //stream->read(&numClusters, sizeof(uint32_t));
-            uint32_t offsets[2]; // TODO: vec
-            std::vector<uint8_t> compressedVIS(len);
-            //readLump(LUMP_VISIBILITY, stream, &compressedVIS[0], len);
-            // TODO: process
-            // TODO: check method:
-            //DecodePVS
-            mDecodedVIS.resize(0);
-        }
-        else
-        {
-            mDecodedVIS.resize(0);
-        }
+        readTypedVec(LUMP_VISIBILITY, stream, mCompressedVis);
     }
 
     void BSPMap::readNodes(const Commons::IOStreamPtr stream)
@@ -219,6 +180,7 @@ namespace LambdaCore
         return glm::dot(plane->mNormal, point) - plane->mDist;
     }
 
+    // TODO: utils?
     int32_t BSPMap::getPointLeaf(const glm::vec3& point) const
     {
         int32_t headNode = mModels[0].mHeadnodes[0];// TODO: customize, assert
@@ -240,6 +202,50 @@ namespace LambdaCore
 
     bool BSPMap::isLeafVisible(int32_t fromLeafIndex, int32_t testLeafIndex) const
     {
-        return true; // TODO: vis test
+        return true; // TODO: vis test; deprecated?
+    }
+
+    void BSPMap::fillVisLeafs(int32_t fromLeafIndex, std::vector<bool>& visLeafs) const
+    {        
+        assert(visLeafs.size() == mLeafs.size());
+        assert(fromLeafIndex >= 0);
+        int32_t offset = mLeafs[fromLeafIndex].mVisOffset;
+
+        if (mCompressedVis.empty() || offset < 0)
+        {
+            std::fill(visLeafs.begin(), visLeafs.end(), true);
+        }
+        else
+        {
+            std::fill(visLeafs.begin(), visLeafs.end(), false);
+            auto dstIt = visLeafs.begin();
+            const uint8_t* pCurVis = &mCompressedVis[offset];
+            // TODO: optimize; check
+            dstIt++;
+            for (uint32_t i = 0; /*i < mLeafs.size()*/; )
+            {
+                uint8_t curByte = *pCurVis++;
+                if (curByte == 0)
+                {
+                    uint32_t numSkip = *pCurVis++ * 8;
+                    for (uint32_t j = 0; j < numSkip; ++j)
+                    {
+                        if (++dstIt == visLeafs.end())
+                            return;
+                    }
+                    i += numSkip;
+                }
+                else
+                {
+                    for (uint32_t j = 0; j < 8; ++j)
+                    {
+                        *dstIt++ = ((curByte & (1 << j)) > 0);
+                        if (dstIt == visLeafs.end())
+                            return;
+                    }
+                    i += 8;
+                }
+            }
+        }
     }
 }

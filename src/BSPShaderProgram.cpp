@@ -17,17 +17,16 @@ namespace LambdaCore
         "void main () {"
         "  vec4 color = texture(u_texDiffuse, v_uvTexture);"
         "  vec4 lightmap = texture(u_texLightmap, v_uvLightmap);"
-        "  vec4 value = color * lightmap * u_lightness * 1.2 + 0.1;"
+        "  vec4 value = color * lightmap * u_lightness;"
         //"  vec4 value = lightmap;" // DBG
         //"  vec4 value = color + 0.2;" // DBG
         "  frag_colour.rgb = value.rgb;"
         "  frag_colour.a = color.a;"
-        "  frag_colour.a = frag_colour.a > 0.5 ? 1.0 : 0.0;" // Alpha test        
+        "  frag_colour.a = frag_colour.a > 0.5 ? 1.0 : 0.0;" // Alpha test
         "}";
 
     static const std::string VERTEX_SHADER =
         "#version 400\n"
-        //"layout(location = 0) in vec3 vp;"
         "in vec3 a_vp;"
         "uniform mat4 u_MVP;"
         "uniform vec3 u_normal;"
