@@ -1,31 +1,52 @@
 #include <cassert>
 #include <LightmapMgr.h>
 #include <Logger/Log.h>
+#include <Imaging/BilinearInterpolator.h>
+#include <Imaging/BicubicInterpolator.h>
 
 using namespace Commons::Render;
 
 namespace LambdaCore
 {
+    static const uint32_t LIGHTMAP_CHANNELS = 3;
+
     LightmapMgr::Block::Block(const LightmapMgr* mgr)
         : mMgr(mgr)
         , mLightmap(new Texture())
         , mAllocVBorder(mgr->mBlockWidth)
     {
         mLightmap->setFilters(Texture::FILTER_LINEAR, Texture::FILTER_LINEAR);
-        mLightmap->setWrap(Texture::WRAP_CLAMP, Texture::WRAP_CLAMP);
+        mLightmap->setWrap(Texture::WRAP_REPEAT, Texture::WRAP_REPEAT); // TODO: Makes no sense, map is always clamped by design
         mLightmap->setData(0, Texture::FORMAT_RGB, mgr->mBlockWidth, mgr->mBlockHeight, nullptr); // Preallocate texture data
     }
 
-    LightmapMgr::LightmapMgr(uint32_t blockSize, uint32_t numBlocks)
+    LightmapMgr::LightmapMgr(uint32_t blockSize, uint32_t numBlocks, uint32_t padding, EInterpolation interpolation, float scaleFactor)
         : mBlockWidth(blockSize)
         , mBlockHeight(blockSize)
         , mBlocks()
-        , mPadding(1)
+        , mPadding(padding)
+        , mInterpolator()
+        , mScaleFactor(scaleFactor)
     {
         mBlocks.reserve(numBlocks);
         for (uint32_t i = 0; i < numBlocks; ++i)
         {
             mBlocks.push_back(Block(this));
+        }
+
+        switch (interpolation)
+        {
+        case InterpolationNONE:
+            assert(scaleFactor == 1.F);
+            break;
+        case InterpolationBilinear:
+            mInterpolator.reset(new Commons::Imaging::BilinearInterpolator());
+            break;
+        case InterpolationBicubic:
+            mInterpolator.reset(new Commons::Imaging::BicubicInterpolator());
+            break;
+        default:
+            assert(0 && "Unknown interpolation type");
         }
     }
 
@@ -56,7 +77,7 @@ namespace LambdaCore
                 topLevel = 0;
                 for (w2 = 0; w2 < width; ++w2)
                 {
-                    uint16_t curLevel = curBlock->mAllocVBorder[w1 + w2]; // TODO: max block = 256!
+                    uint16_t curLevel = curBlock->mAllocVBorder[w1 + w2];
                     if (curLevel >= btmLevel)
                         break;
                     if (curLevel >= topLevel)
@@ -78,23 +99,53 @@ namespace LambdaCore
         }
     }
 
-    LightmapMgr::Lightmap LightmapMgr::allocLightmap(uint32_t width, uint32_t height, const uint8_t* data, uint32_t magFactor)
-    {
+    LightmapMgr::Lightmap LightmapMgr::allocLightmap(uint32_t width, uint32_t height, const uint8_t* data)
+    {        
+        Lightmap result;
+
+        // Interpolate image
+        Commons::Imaging::ImageInfo srcInfo(width, height, LIGHTMAP_CHANNELS);
+        Commons::Imaging::ImageInfo dstInfo;
+        std::vector<uint8_t> dstData;
+        const uint8_t *pData;        
+        if (mInterpolator && mScaleFactor != 1.F)
+        {
+            dstInfo = Commons::Imaging::ImageInfo(uint32_t(width * mScaleFactor), uint32_t(height * mScaleFactor), srcInfo.getNumChannels());
+            dstData.resize(dstInfo.getImageSize());
+            if (!mInterpolator->interpolateImage(data, srcInfo, &dstData[0], dstInfo))
+            {
+                LOG_ERROR("Can't interpolate lightmap");
+                return result;
+            }
+            pData = &dstData[0];
+        }
+        else
+        {
+            dstInfo = srcInfo;
+            pData = data;
+        }
+
+        // Find place in blocks
         uint32_t x, y;
-        const Block* blockPtr = calcPlaceForLightmap(width + 2 * mPadding, height + 2 * mPadding, x, y);
+        const Block* blockPtr = calcPlaceForLightmap(dstInfo.getWidth() + 2 * mPadding, dstInfo.getHeight() + 2 * mPadding, x, y);
         x += mPadding;
         y += mPadding;
-        // TODO: padding color?
-        blockPtr->mLightmap->setSubData(0, Texture::FORMAT_RGB, x, y, width, height, data);
 
-        Lightmap result;
+        // Upload
+        // TODO: set padding color?
+        blockPtr->mLightmap->setSubData(0, Texture::FORMAT_RGB, x, y, dstInfo.getWidth(), dstInfo.getHeight(), pData);
+
         result.mTex = blockPtr->mLightmap.get();
-        result.mX = x;
-        result.mY = y;
-        result.mW = mBlockWidth;
-        result.mH = mBlockHeight;
-        result.mMagFactor = magFactor;
+        result.mOffset = glm::u32vec2(x, y);
+        result.mSize = glm::u32vec2(mBlockWidth, mBlockHeight);
+        result.mMagFactor = glm::vec2((float)dstInfo.getWidth() / srcInfo.getWidth(), (float)dstInfo.getHeight() / srcInfo.getHeight());
         return result;
+    }
+
+    void LightmapMgr::saveBlocksCache(const std::string& path)
+    {
+        // TODO: save; debug interpolation issues
+
     }
 
     void LightmapMgr::clear() 

@@ -45,6 +45,14 @@ set(BITLINKER_COMMONS_SOURCES
     BitlinkerCommons/Render/RenderWindow.cpp
     BitlinkerCommons/Render/RenderNode.h
     BitlinkerCommons/Render/RenderNode.cpp
+    
+    #Imaging
+    BitlinkerCommons/Imaging/ImageInfo.h
+    BitlinkerCommons/Imaging/IInterpolator.h
+    BitlinkerCommons/Imaging/BilinearInterpolator.h
+    BitlinkerCommons/Imaging/BilinearInterpolator.cpp
+    BitlinkerCommons/Imaging/BicubicInterpolator.h
+    BitlinkerCommons/Imaging/BicubicInterpolator.cpp
 )
 
 set(LAMBDA_CORE_SOURCES
@@ -55,6 +63,8 @@ set(LAMBDA_CORE_SOURCES
     src/BSPMap.h
     src/BSPRender.cpp
     src/BSPRender.h
+    src/Model.cpp
+    src/Model.h
     src/MipTexLoader.cpp
     src/MipTexLoader.h
     src/LightmapMgr.cpp
@@ -63,6 +73,8 @@ set(LAMBDA_CORE_SOURCES
     src/BSPShaderProgram.h
     src/FreeFlyCameraController.cpp
     src/FreeFlyCameraController.h
+    src/PlayerController.h
+    src/PlayerController.cpp
 )
 
 

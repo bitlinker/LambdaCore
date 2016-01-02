@@ -2,9 +2,13 @@
 #include <glm/glm.hpp>
 #include <stdint.h>
 #include <vector>
+
 #include <Common/NonCopyable.h>
+
 #include <Render/GLContext.h>
 #include <Render/Texture.h>
+
+#include <Imaging/IInterpolator.h>
 
 namespace LambdaCore
 {
@@ -16,17 +20,17 @@ namespace LambdaCore
         public:
             Lightmap()
                 : mTex(nullptr)
-                , mX(0), mY(0)
-                , mW(0), mH(0)
-                , mMagFactor(1)
+                , mOffset()
+                , mSize()
+                , mMagFactor(1.F, 1.F)
             {
             }
 
         public:
-            Commons::Render::Texture* mTex;
-            uint32_t mX, mY;
-            uint32_t mW, mH;
-            uint32_t mMagFactor;
+            Commons::Render::Texture* mTex;            
+            glm::u32vec2 mOffset;
+            glm::u32vec2 mSize;
+            glm::vec2 mMagFactor;            
         };
 
         class Block
@@ -41,11 +45,21 @@ namespace LambdaCore
         };
 
     public:
-        LightmapMgr(uint32_t blockSize, uint32_t numBlocks);
+        enum EInterpolation
+        {
+            InterpolationNONE,
+            InterpolationBilinear,
+            InterpolationBicubic,
+        };
+
+    public:
+        LightmapMgr(uint32_t blockSize, uint32_t numBlocks, uint32_t padding, EInterpolation interpolation, float scaleFactor);
         ~LightmapMgr();
 
-        Lightmap allocLightmap(uint32_t width, uint32_t height, const uint8_t* data, uint32_t magFactor);
+        Lightmap allocLightmap(uint32_t width, uint32_t height, const uint8_t* data);
         void clear();
+
+        void saveBlocksCache(const std::string& path);
 
     private:
         const LightmapMgr::Block* calcPlaceForLightmap(uint32_t width, uint32_t height, uint32_t& x, uint32_t& y);
@@ -55,5 +69,8 @@ namespace LambdaCore
         uint32_t mNumBlocks;
         std::vector<Block> mBlocks;
         uint32_t mPadding;
+        EInterpolation mInterpolation;
+        Commons::Imaging::IInterpolatorPtr mInterpolator;
+        float mScaleFactor;
     };
 }

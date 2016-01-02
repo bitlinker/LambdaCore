@@ -12,123 +12,6 @@
 using namespace Commons;
 using namespace Commons::Render;
 
-inline unsigned char getpixel(const uint8_t* src, int32_t srcWidth, int32_t srcHeight, int32_t x, int32_t y, int32_t numChannels, int32_t channel)
-{
-    // Border color
-    //if (x < 0 || y < 0 || x >= srcWidth || y >= srcHeight)
-    //    return 128;
-
-    // Clamp sampler implementation
-    if (x < 0)
-        x = 0;
-
-    if (x >= srcWidth)
-        x = srcWidth - 1;
-
-    if (y < 0)
-        y = 0;
-
-    if (y >= srcHeight)
-        y = srcHeight - 1;
-
-    
-    return src[(x + y * srcWidth) * 3 + channel];
-}
-
-// TODO: move
-static void BicubicInterpolate(const uint8_t *src, int32_t srcWidth, int32_t srcHeight, int32_t numChannels, uint8_t *dst, int32_t dstWidth, int32_t dstHeight)
-{
-    const float tx = float(srcWidth) / dstWidth;
-    const float ty = float(srcHeight) / dstHeight;
-    const int32_t srcStride = srcWidth * numChannels;
-    const int32_t dstStride = dstWidth * numChannels;
-
-    float C[5] = { 0 };
-
-    for (int32_t i = 0; i < dstHeight; ++i)
-    {
-        for (int32_t j = 0; j < dstWidth; ++j)
-        {
-            const int32_t x = uint32_t(tx * j);
-            const int32_t y = uint32_t(ty * i);
-            const float dx = tx * j - x;
-            const float dy = ty * i - y;
-
-            for (int32_t k = 0; k < numChannels; ++k)
-            {
-                for (int32_t jj = 0; jj < 4; ++jj)
-                {
-                    const int32_t z = y - 1 + jj;
-                    float a0 = getpixel(src, srcWidth, srcHeight, x, z, numChannels, k);
-                    float d0 = getpixel(src, srcWidth, srcHeight, x - 1, z, numChannels, k) - a0;
-                    float d2 = getpixel(src, srcWidth, srcHeight, x + 1, z, numChannels, k) - a0;
-                    float d3 = getpixel(src, srcWidth, srcHeight, x + 2, z, numChannels, k) - a0;
-                    float a1 = -1.0 / 3 * d0 + d2 - 1.0 / 6 * d3;
-                    float a2 = 1.0 / 2 * d0 + 1.0 / 2 * d2;
-                    float a3 = -1.0 / 6 * d0 - 1.0 / 2 * d2 + 1.0 / 6 * d3;
-                    C[jj] = a0 + a1 * dx + a2 * dx * dx + a3 * dx * dx * dx;
-
-                    d0 = C[0] - C[1];
-                    d2 = C[2] - C[1];
-                    d3 = C[3] - C[1];
-                    a0 = C[1];
-                    a1 = -1.0 / 3 * d0 + d2 - 1.0 / 6 * d3;
-                    a2 = 1.0 / 2 * d0 + 1.0 / 2 * d2;
-                    a3 = -1.0 / 6 * d0 - 1.0 / 2 * d2 + 1.0 / 6 * d3;
-                    float value = a0 + a1 * dy + a2 * dy * dy + a3 * dy * dy * dy;
-
-                    if (value > 255.F)
-                        value = 255.F;
-
-                    if (value < 0.F)
-                        value = 0.F;
-
-                    dst[i * dstStride + j * numChannels + k] = (uint8_t)(value);
-                }
-            }
-        }
-    }
-}
-
-
-static void BilinearInterpolate(const uint8_t* src, int32_t srcWidth, int32_t srcHeight, int32_t numChannels, uint8_t *dst, int32_t dstWidth, int32_t dstHeight)
-{
-    int32_t a, b, c, d, x, y, index;
-    float tx = (float)(srcWidth - 1) / dstWidth;
-    float ty = (float)(srcHeight - 1) / dstHeight;
-    float x_diff, y_diff;
-    const int32_t srcStride = srcWidth * numChannels;
-    const int32_t dstStride = dstWidth * numChannels;
-
-    for (int32_t i = 0; i < dstHeight; i++)
-    {
-        for (int32_t j = 0; j < dstWidth; j++)
-        {
-            x = (int32_t)(tx * j);
-            y = (int32_t)(ty * i);
-
-            x_diff = ((tx * j) - x);
-            y_diff = ((ty * i) - y);
-
-            index = y * srcStride + x * numChannels;
-            a = (int32_t)index;
-            b = (int32_t)(index + numChannels);
-            c = (int32_t)(index + srcStride);
-            d = (int32_t)(index + srcStride + numChannels);
-
-            for (int32_t k = 0; k < numChannels; k++)
-            {
-                dst[i * dstStride + j * numChannels + k] =
-                    src[a + k] * (1.F - x_diff) * (1.F - y_diff)
-                    + src[b + k] * (1.F - y_diff) * (x_diff)
-                    +src[c + k] * (y_diff)* (1.F - x_diff)
-                    + src[d + k] * (y_diff)* (x_diff);
-            }
-        }
-    }
-}
-
-
 namespace LambdaCore
 {  
     static const int32_t LIGHTMAP_SAMPLE_SIZE = 16;
@@ -145,9 +28,9 @@ namespace LambdaCore
     Beware that sky textures are made of two distinct parts.*/
 
     BSPRender::BSPRender(const BSPMapPtr& map, const Commons::Render::SharedTextureMgrPtr& textureManager)
-        : mLightmapMgr(256, 128)
+        : mLightmapMgr(1024, 128, 1, LightmapMgr::InterpolationBilinear, 4.0000F)
         , mMap(map)
-        , mTexMgr(textureManager)
+        , mTexMgr(textureManager) // TODO: common
         , mVao()
         , mVertexVBO(GL_ARRAY_BUFFER)
         , mVisLeafs()
@@ -233,18 +116,9 @@ namespace LambdaCore
                 // TODO: check if face has zero size
                 glm::i32vec2 lightmapSize = (faceData.mExtents / LIGHTMAP_SAMPLE_SIZE) + 1;
 
-                // TODO: combine in texture atlas
                 if (face.mLightmapOffset >= 0)
                 {                    
-                    // TODO: interpolation in lightmap manager
-                    /*uint32_t LIGHTMAP_MAG_FACTOR = 4;
-                    uint32_t newWidth = lightmapSize.x * LIGHTMAP_MAG_FACTOR;
-                    uint32_t newHeight = lightmapSize.y * LIGHTMAP_MAG_FACTOR;
-                    std::vector<uint8_t> newLightmap(newWidth * newHeight * 3);
-                    BicubicInterpolate(&mMap->mLightmaps[face.mLightmapOffset], lightmapSize.x, lightmapSize.y, 3, &newLightmap[0], newWidth, newHeight);
-                    faceData.mLightmap = mLightmapMgr.allocLightmap(newWidth, newHeight, &newLightmap[0], LIGHTMAP_MAG_FACTOR);*/
-
-                    faceData.mLightmap = mLightmapMgr.allocLightmap(lightmapSize.x, lightmapSize.y, &mMap->mLightmaps[face.mLightmapOffset], 1);
+                    faceData.mLightmap = mLightmapMgr.allocLightmap(lightmapSize.x, lightmapSize.y, &mMap->mLightmaps[face.mLightmapOffset]);
                 }
             }            
         }
@@ -352,9 +226,8 @@ namespace LambdaCore
                 ++numLightmapTextureBinds;
             }
 
-            // TODO: float?
-            uint32_t lightmapSample = LIGHTMAP_SAMPLE_SIZE / lightmap.mMagFactor;
-
+            glm::vec2 lightmapSampleSize(LIGHTMAP_SAMPLE_SIZE / lightmap.mMagFactor.x, LIGHTMAP_SAMPLE_SIZE / lightmap.mMagFactor.y);
+            
             // TODO: pack this in single matrix, optimize                
             mShader.setTextureMapping(
                 texInfo.mS,
@@ -363,13 +236,10 @@ namespace LambdaCore
                 glm::vec2(texInfo.mSShift, texInfo.mTShift),
                 glm::vec2(tex.mWidth, tex.mHeight),
 
-                glm::vec2(texInfo.mSShift - mFaceData[it->mFaceIndex].mMins.x + (lightmapSample >> 1) + lightmap.mX * lightmapSample,
-                    texInfo.mTShift - mFaceData[it->mFaceIndex].mMins.y + (lightmapSample >> 1) + lightmap.mY * lightmapSample
-                    ),
-                glm::vec2(
-                    lightmap.mW * lightmapSample,
-                    lightmap.mH * lightmapSample
-                    )
+                glm::vec2(texInfo.mSShift - mFaceData[it->mFaceIndex].mMins.x + (lightmap.mOffset.x + 0.5F) * lightmapSampleSize.x,
+                    texInfo.mTShift - mFaceData[it->mFaceIndex].mMins.y + (lightmap.mOffset.y + 0.5F) * lightmapSampleSize.y
+                    ),                
+                glm::vec2(lightmapSampleSize.x * lightmap.mSize.x, lightmapSampleSize.y * lightmap.mSize.y)
                 );
 
             ::glDrawElements(GL_TRIANGLE_FAN, it->mNumIndexes, GL_UNSIGNED_SHORT, &mVertIndices[it->mStartIndex]);
