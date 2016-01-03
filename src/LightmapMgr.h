@@ -22,7 +22,7 @@ namespace LambdaCore
                 : mTex(nullptr)
                 , mOffset()
                 , mSize()
-                , mMagFactor(1.F, 1.F)
+                , mScaleFactor(1.F)
             {
             }
 
@@ -30,7 +30,7 @@ namespace LambdaCore
             Commons::Render::Texture* mTex;            
             glm::u32vec2 mOffset;
             glm::u32vec2 mSize;
-            glm::vec2 mMagFactor;            
+            glm::vec2 mScaleFactor;
         };
 
         class Block

@@ -27,8 +27,8 @@ namespace LambdaCore
         class FaceData
         {
         public:
-            glm::i32vec2 mMins; // TODO: if needed
-            glm::i32vec2 mExtents;
+            glm::i32vec2 mLightmapMins; // TODO: if needed
+            glm::i32vec2 mLightmapExtents;
             LightmapMgr::Lightmap mLightmap;
         };
 
@@ -50,13 +50,20 @@ namespace LambdaCore
         void render(const Commons::Render::CameraPtr& camera);
 
     private:
-
+        void initFaceData();
         void initVBOs();
+        void initTextures();
+        void initLightmaps();
+
+        void calcFaceSize(const BSPMap::BSPFace& face, glm::vec2& mins, glm::vec2& maxs);
 
         void drawLeaf(const BSPMap::BSPLeaf& leaf);
         void drawFace(uint32_t faceIndex);
 
         void renderModel(const glm::mat4& matrix);
+
+        // TODO: to another class:
+        void traceRay(const glm::vec3 pos, const glm::vec3 normal);
 
     private:
         LightmapMgr mLightmapMgr;

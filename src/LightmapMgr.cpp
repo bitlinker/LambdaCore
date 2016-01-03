@@ -37,7 +37,7 @@ namespace LambdaCore
         switch (interpolation)
         {
         case InterpolationNONE:
-            assert(scaleFactor == 1.F);
+            assert(mScaleFactor == 1.F);
             break;
         case InterpolationBilinear:
             mInterpolator.reset(new Commons::Imaging::BilinearInterpolator());
@@ -110,7 +110,7 @@ namespace LambdaCore
         const uint8_t *pData;        
         if (mInterpolator && mScaleFactor != 1.F)
         {
-            dstInfo = Commons::Imaging::ImageInfo(uint32_t(width * mScaleFactor), uint32_t(height * mScaleFactor), srcInfo.getNumChannels());
+            dstInfo = Commons::Imaging::ImageInfo(width * mScaleFactor, height * mScaleFactor, srcInfo.getNumChannels());
             dstData.resize(dstInfo.getImageSize());
             if (!mInterpolator->interpolateImage(data, srcInfo, &dstData[0], dstInfo))
             {
@@ -138,7 +138,7 @@ namespace LambdaCore
         result.mTex = blockPtr->mLightmap.get();
         result.mOffset = glm::u32vec2(x, y);
         result.mSize = glm::u32vec2(mBlockWidth, mBlockHeight);
-        result.mMagFactor = glm::vec2((float)dstInfo.getWidth() / srcInfo.getWidth(), (float)dstInfo.getHeight() / srcInfo.getHeight());
+        result.mScaleFactor = glm::vec2((float)dstInfo.getWidth() / srcInfo.getWidth(), (float)dstInfo.getHeight() / srcInfo.getHeight());
         return result;
     }
 

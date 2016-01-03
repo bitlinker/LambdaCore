@@ -1,4 +1,5 @@
 #include <cassert>
+#include <limits>
 #include <BSPRender.h>
 #include <Exception/Exception.h>
 #include <Common/StringUtils.h>
@@ -28,7 +29,7 @@ namespace LambdaCore
     Beware that sky textures are made of two distinct parts.*/
 
     BSPRender::BSPRender(const BSPMapPtr& map, const Commons::Render::SharedTextureMgrPtr& textureManager)
-        : mLightmapMgr(1024, 128, 1, LightmapMgr::InterpolationBilinear, 4.0000F)
+        : mLightmapMgr(512, 64, 1, LightmapMgr::InterpolationNONE, 1.F)
         , mMap(map)
         , mTexMgr(textureManager) // TODO: common
         , mVao()
@@ -47,87 +48,19 @@ namespace LambdaCore
 
         // Load textures:
         // TODO: func
-        {
-            auto it = map->mMipTextures.begin();
-            auto itEnd = map->mMipTextures.end();
-            for (; it != itEnd; ++it)
-            {                
-                SharedTexturePtr tex = mTexMgr->getTexture(it->mName);
-                mTextures.push_back(tex);
-            }
-        }
+       
 
         // Calc face data:
         // TODO: func
-        {            
-            mFaceData.resize(mMap->mFaces.size());
-            for (uint32_t fc = 0; fc < mMap->mFaces.size(); ++fc)
-            {
-                const BSPMap::BSPFace& face = mMap->mFaces[fc]; // TODO: func for faces
-                FaceData& faceData = mFaceData[fc];
-
-                // TODO: in map class?
-                float mins[2], maxs[2];
-                mins[0] = mins[1] = 999999;
-                maxs[0] = maxs[1] = -99999;
-                
-                glm::vec3 *pVertex = nullptr;                
-
-                const BSPMap::BSPTextureInfo& texInfo = mMap->mTexInfo[face.mTextureInfo];
-                for (uint32_t i = 0; i < face.mNumEdges; ++i)
-                {
-                    int32_t edge = mMap->mSurfEdges[face.mFirstEdge + i];
-                    if (edge >= 0)
-                    {
-                        pVertex = &mMap->mVertices[mMap->mEdges[edge].mVertex[0]];
-                    }
-                    else
-                    {
-                        pVertex = &mMap->mVertices[mMap->mEdges[-edge].mVertex[1]];
-                    }
-
-                    glm::vec2 value;
-                    value.x = (glm::dot(texInfo.mS, *pVertex) + texInfo.mSShift);
-                    value.y = (glm::dot(texInfo.mT, *pVertex) + texInfo.mTShift);
-                    for (uint32_t j = 0; j < 2; ++j)
-                    {                   
-                        // TODO: std min/max
-                        if (value[j] < mins[j])
-                            mins[j] = value[j];
-                        if (value[j] > maxs[j])
-                            maxs[j] = value[j];
-                    }
-                }
-
-                // Calc the integer extents:
-                glm::i32vec2 bmins, bmaxs;
-                for (uint32_t i = 0; i < 2; i++)
-                {
-                    bmins[i] = (int32_t)floor(mins[i] / LIGHTMAP_SAMPLE_SIZE);
-                    bmaxs[i] = (int32_t)ceil(maxs[i] / LIGHTMAP_SAMPLE_SIZE);
-
-                    faceData.mMins[i] = bmins[i] * LIGHTMAP_SAMPLE_SIZE;
-                    faceData.mExtents[i] = (bmaxs[i] - bmins[i]) * LIGHTMAP_SAMPLE_SIZE;
-                    //if (!(tex->flags & TEX_SPECIAL) && s->extents[i] > 512 /* 256 */)
-                    //  Sys_Error("Bad surface extents");
-                }
-
-                // Calc lightmap texture
-                // TODO: check if face has zero size
-                glm::i32vec2 lightmapSize = (faceData.mExtents / LIGHTMAP_SAMPLE_SIZE) + 1;
-
-                if (face.mLightmapOffset >= 0)
-                {                    
-                    faceData.mLightmap = mLightmapMgr.allocLightmap(lightmapSize.x, lightmapSize.y, &mMap->mLightmaps[face.mLightmapOffset]);
-                }
-            }            
-        }
-
-        initVBOs();
-
-        // TODO: func
-        mModelData.resize(mMap->mModels.size());
         
+
+        initFaceData();
+        initVBOs();
+        initTextures();
+        initLightmaps();
+
+        // TODO: func, in map?
+        mModelData.resize(mMap->mModels.size());        
         mModelData[0].mIsVisible = true;
         mModelData[1].mIsVisible = true;
     }
@@ -135,12 +68,91 @@ namespace LambdaCore
     void BSPRender::initVBOs()
     {
         mVertexVBO.setData(sizeof(glm::vec3) * mMap->mVertices.size(), &mMap->mVertices[0], GL_STATIC_DRAW);
-        // TODO: index buffer?
     }
 
-    void genLightmapTex()
+    void BSPRender::initTextures()
     {
-        // TODO
+        auto it = mMap->mMipTextures.begin();
+        const auto itEnd = mMap->mMipTextures.end();
+        mTextures.reserve(mMap->mMipTextures.size());
+        for (; it != itEnd; ++it)
+        {
+            SharedTexturePtr tex = mTexMgr->getTexture(it->mName);
+            mTextures.push_back(tex);
+        }
+    }
+
+    void BSPRender::calcFaceSize(const BSPMap::BSPFace& face, glm::vec2& mins, glm::vec2& maxs)
+    {
+        mins.x = mins.y = std::numeric_limits<float>::max();
+        maxs.x = maxs.y = std::numeric_limits<float>::lowest();
+        
+        glm::vec3 *pVertex = nullptr;
+        const BSPMap::BSPTextureInfo& texInfo = mMap->mTexInfo[face.mTextureInfo];
+        for (uint32_t i = 0; i < face.mNumEdges; ++i)
+        {
+            int32_t edge = mMap->mSurfEdges[face.mFirstEdge + i];
+            if (edge >= 0)
+            {
+                pVertex = &mMap->mVertices[mMap->mEdges[edge].mVertex[0]];
+            }
+            else
+            {
+                pVertex = &mMap->mVertices[mMap->mEdges[-edge].mVertex[1]];
+            }
+
+            glm::vec2 value;
+            value.x = (glm::dot(texInfo.mS, *pVertex) + texInfo.mSShift);
+            value.y = (glm::dot(texInfo.mT, *pVertex) + texInfo.mTShift);
+            for (uint32_t j = 0; j < 2; ++j)
+            {
+                if (value[j] < mins[j])
+                    mins[j] = value[j];
+                if (value[j] > maxs[j])
+                    maxs[j] = value[j];
+            }
+        }
+    }
+
+    void BSPRender::initFaceData() // TODO: bsp utils?
+    {
+        mFaceData.resize(mMap->mFaces.size());
+        for (uint32_t fc = 0; fc < mMap->mFaces.size(); ++fc)
+        {
+            const BSPMap::BSPFace& face = mMap->mFaces[fc];
+            FaceData& faceData = mFaceData[fc];
+
+            glm::vec2 mins, maxs;
+            calcFaceSize(face, mins, maxs);
+
+            // Calculate face integer extents for ligthmap:
+            glm::i32vec2 bmins, bmaxs;
+            for (uint32_t i = 0; i < 2; i++)
+            {
+                bmins[i] = (int32_t)floor(mins[i] / LIGHTMAP_SAMPLE_SIZE);
+                bmaxs[i] = (int32_t)ceil(maxs[i] / LIGHTMAP_SAMPLE_SIZE);
+
+                faceData.mLightmapMins[i] = bmins[i] * LIGHTMAP_SAMPLE_SIZE;
+                faceData.mLightmapExtents[i] = (bmaxs[i] - bmins[i]) * LIGHTMAP_SAMPLE_SIZE;
+            }
+        }
+    }
+
+    void BSPRender::initLightmaps()
+    {
+        for (uint32_t fc = 0; fc < mMap->mFaces.size(); ++fc)
+        {
+            const BSPMap::BSPFace& face = mMap->mFaces[fc];
+            FaceData& faceData = mFaceData[fc];
+            
+            // Update lightmap texture
+            glm::i32vec2 lightmapSize = (faceData.mLightmapExtents / LIGHTMAP_SAMPLE_SIZE) + 1;
+            if (face.mLightmapOffset >= 0 && faceData.mLightmapExtents.x > 0 && faceData.mLightmapExtents.y > 0)
+            {
+                // TODO: store extents data in lightmap?
+                faceData.mLightmap = mLightmapMgr.allocLightmap(lightmapSize.x, lightmapSize.y, &mMap->mLightmaps[face.mLightmapOffset]);
+            }
+        }
     }
 
     void BSPRender::renderModel(const glm::mat4& matrix)
@@ -226,7 +238,8 @@ namespace LambdaCore
                 ++numLightmapTextureBinds;
             }
 
-            glm::vec2 lightmapSampleSize(LIGHTMAP_SAMPLE_SIZE / lightmap.mMagFactor.x, LIGHTMAP_SAMPLE_SIZE / lightmap.mMagFactor.y);
+            // TODO: float?
+            glm::vec2 lightmapSampleSize(LIGHTMAP_SAMPLE_SIZE / lightmap.mScaleFactor.x, LIGHTMAP_SAMPLE_SIZE / lightmap.mScaleFactor.y);
             
             // TODO: pack this in single matrix, optimize                
             mShader.setTextureMapping(
@@ -236,8 +249,8 @@ namespace LambdaCore
                 glm::vec2(texInfo.mSShift, texInfo.mTShift),
                 glm::vec2(tex.mWidth, tex.mHeight),
 
-                glm::vec2(texInfo.mSShift - mFaceData[it->mFaceIndex].mMins.x + (lightmap.mOffset.x + 0.5F) * lightmapSampleSize.x,
-                    texInfo.mTShift - mFaceData[it->mFaceIndex].mMins.y + (lightmap.mOffset.y + 0.5F) * lightmapSampleSize.y
+                glm::vec2(texInfo.mSShift - mFaceData[it->mFaceIndex].mLightmapMins.x + (lightmap.mOffset.x + 0.5F) * lightmapSampleSize.x,
+                    texInfo.mTShift - mFaceData[it->mFaceIndex].mLightmapMins.y + (lightmap.mOffset.y + 0.5F) * lightmapSampleSize.y
                     ),                
                 glm::vec2(lightmapSampleSize.x * lightmap.mSize.x, lightmapSampleSize.y * lightmap.mSize.y)
                 );
@@ -417,5 +430,10 @@ namespace LambdaCore
 
         batch.mNumIndexes = mVertIndices.size() - batch.mStartIndex;
         mFaceBatches.push_back(batch);
+    }
+
+    void BSPRender::traceRay(const glm::vec3 pos, const glm::vec3 normal)
+    {
+        // TODO
     }
 }
