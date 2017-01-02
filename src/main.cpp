@@ -5,10 +5,10 @@
 #include <Render/SharedTextureMgr.h>
 #include <Logger/Log.h>
 
-
 #include <WAD.h>
 #include <BSPRender.h>
 #include <MipTexLoader.h>
+#include <Model.h>
 #include <FreeFlyCameraController.h>
 
 #include <Streams/FileStream.h>
@@ -51,6 +51,9 @@ int main(int argc, char **argv)
     
     Commons::Render::RenderWindow window(params);
     Commons::Render::GLContext context;
+
+    Commons::FileStreamPtr strm_mdl(new Commons::FileStream("f:/Games/Half-Life/valve/models/barney.mdl", Commons::FileStream::MODE_READ));
+    ModelPtr model = std::make_shared<Model>(strm_mdl);
 
     // TODO: self stream object, exceptions or checks
     Commons::FileStreamPtr strm_map(new Commons::FileStream("f:/Games/Half-Life/valve/maps/crossfire.bsp", Commons::FileStream::MODE_READ));

@@ -22,7 +22,8 @@ namespace LambdaCore
         //"  vec4 value = color + 0.2;" // DBG
         "  frag_colour.rgb = value.rgb;"
         "  frag_colour.a = color.a;"
-        "  frag_colour.a = frag_colour.a > 0.5 ? 1.0 : 0.0;" // Alpha test
+        //"  frag_colour.a = frag_colour.a > 0.5 ? 1.0 : 0.0;" // Alpha test
+        " if (frag_colour.a < 0.5) discard;"
         "}";
 
     static const std::string VERTEX_SHADER =

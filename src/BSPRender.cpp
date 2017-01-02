@@ -46,14 +46,6 @@ namespace LambdaCore
         // Preinit vis leaves
         mVisLeafs.resize(map->mLeafs.size());
 
-        // Load textures:
-        // TODO: func
-       
-
-        // Calc face data:
-        // TODO: func
-        
-
         initFaceData();
         initVBOs();
         initTextures();

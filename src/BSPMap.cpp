@@ -1,12 +1,195 @@
 #include <BSPMap.h>
 #include <Exception/Exception.h>
 #include <Common/StringUtils.h>
+#include <Logger/Log.h>
 #include <algorithm>
+#include <map>
 
 using namespace Commons;
 
 namespace LambdaCore
 {  
+    class Entity
+    {
+    public:
+        void clear()
+        {
+            mValues.clear();
+        }
+
+        void put(const std::string& key, const std::string& value)
+        {
+            mValues.insert(TEntityValuesPair(key, value));
+        }
+
+        bool get(const std::string& key, std::string& value)
+        {
+            const auto it = mValues.find(key);
+            if (it == mValues.end())
+            {
+                return false;
+            }
+
+            value = it->second;
+            return true;
+        }
+
+        bool getClassName(std::string& value)
+        {
+            return get("classname", value);
+        }
+
+    private:
+        typedef std::map<std::string, std::string> TEntityValuesMap;
+        typedef std::pair<std::string, std::string> TEntityValuesPair;
+        TEntityValuesMap mValues;
+    };
+
+    // TODO: move to parser file
+    static const char CHAR_BRACE_OPEN = '{';
+    static const char CHAR_BRACE_CLOSE = '}';
+    static const char CHAR_QUOTE = '"';
+    static const int32_t CHAR_EOF = -1;
+
+    // Entities parser
+    // Entities string is not owned
+    class EntityParser
+    {
+    public:
+        EntityParser(const char* str, uint32_t len)
+            : mString(str)
+            , mPos(0)
+            , mLength(len)
+        {
+        }
+
+
+    private:
+        int32_t getChar()
+        {
+            if (mPos == mLength) {
+                return CHAR_EOF;
+            }
+            return mString[mPos++];
+        }
+
+        bool isWhitespace(int32_t c)
+        {
+            return
+                c == ' ' ||
+                c == '\t' ||
+                c == '\r' ||
+                c == '\f' ||
+                c == '\n';
+        }
+
+        bool parseEntity(Entity& entity)
+        {
+            std::string tmpStr;
+            tmpStr.reserve(256); // TODO: const; common?
+
+            std::string tmpKey;
+            bool isKey = true;
+
+            while (true)
+            {
+                int32_t c = getChar();
+                if (c == CHAR_EOF)
+                {
+                    LOG_WARN("Error parsing entity - unexpected EOF, pos %d", mPos);
+                    return false;
+                }
+                else if (isWhitespace(c))
+                {
+                    continue;
+                }
+                else if (c == CHAR_QUOTE)
+                {
+                    if (!parseQuotedString(tmpStr))
+                    {
+                        LOG_WARN("Error parsing entity string, skipping, pos %d", mPos);
+                        return false;
+                    }
+
+                    if (isKey)
+                    {
+                        tmpKey = tmpStr;
+                    }
+                    else
+                    {
+                        // TODO: assert key is not found
+                        entity.put(tmpKey, tmpStr);
+                    }
+                    isKey = !isKey;
+                }
+                else if (c == CHAR_BRACE_CLOSE)
+                {
+                    return isKey; // Should complete key-value pair at this moment
+                }
+            }          
+        }
+        
+        bool parseQuotedString(std::string& str)
+        {
+            str.clear();
+            while(true)
+            {
+                int32_t c = getChar();
+                if (c == CHAR_EOF)
+                {
+                    LOG_WARN("Error parsing entity quoted string - unexpected EOF, pos %d", mPos);
+                    return false;
+                }
+                else if (c == CHAR_QUOTE)
+                {
+                    return true;
+                }
+                else
+                {
+                    str.push_back(c);
+                }
+            };
+        }
+
+    public:
+        bool parse(std::vector<Entity>& entities)
+        {
+            mPos = 0;
+            entities.clear();
+            while (true)
+            {
+                int32_t c = getChar();
+                if (isWhitespace(c))
+                {
+                    continue;
+                }
+                else if (c == CHAR_BRACE_OPEN)
+                {
+                    Entity entity;
+                    if (parseEntity(entity))
+                    {
+                        entities.push_back(entity);
+                    }
+                    else
+                    {
+                        LOG_WARN("Error parsing entity, skipping, pos %d", mPos);
+                    }
+                }
+                else if (c == CHAR_EOF)
+                {
+                    break;
+                }
+            }
+            return true;
+        }
+
+    private:
+        const char* mString;
+        uint32_t mPos;
+        uint32_t mLength;
+    };
+
+
     BSPMap::BSPMap(const Commons::IOStreamPtr stream)
         : mHeader()
         // TODO: init members
@@ -19,9 +202,6 @@ namespace LambdaCore
     {
         stream->read(&mHeader, sizeof(mHeader));
         checkVersion();
-        
-        std::vector<uint8_t> entities(getLumpSize(LUMP_ENTITIES));
-        readLump(LUMP_ENTITIES, stream, &entities[0], entities.size());
         
         readEntities(stream);
         readPlanes(stream);
@@ -37,7 +217,17 @@ namespace LambdaCore
         readMarkSurfaces(stream);
         readEdges(stream);
         readSurfEdges(stream);
-        readModels(stream);        
+        readModels(stream);
+
+        // TODO: not here
+        EntityParser parser(mEntities.c_str(), mEntities.length());
+
+        std::vector<Entity> entities;
+        bool res = parser.parse(entities);
+
+        std::string className;
+        res = entities[0].getClassName(className);
+        // TODO
     }
 
     void BSPMap::checkVersion()

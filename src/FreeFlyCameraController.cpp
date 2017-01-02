@@ -2,9 +2,38 @@
 
 // TODO: input system
 #include <windows.h>
+#include <vector>
 
 namespace LambdaCore
 {    
+    // TODO:
+    class InputManager
+    {
+    public:
+        InputManager()
+            : mKeyStates(256)
+        {
+        }
+
+        void onKeyPressed(uint32_t keyCode)
+        {
+            mKeyStates[keyCode] = true;
+        }
+
+        void onKeyReleased(uint32_t keyCode)
+        {
+            mKeyStates[keyCode] = false;
+        }
+
+        void update()
+        {
+            // TODO: +attack; attack
+        }
+
+    private:
+        std::vector<bool> mKeyStates;
+    };
+
     static bool CheckKey(int key)
     {
         return (::GetAsyncKeyState(key) & 0x8000) > 0;
@@ -58,7 +87,7 @@ namespace LambdaCore
         }
        
         glm::mat4 rotationMatrix(glm::mat4_cast(m_camera->getRotation()));
-        //direction = rotationMatrix * direction;
+        direction = rotationMatrix * direction;
 
         glm::vec3 translation = m_camera->getTranslation() + glm::vec3(direction) * SPEED * delta;
         m_camera->setTranslation(translation);

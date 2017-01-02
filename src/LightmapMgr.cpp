@@ -16,7 +16,7 @@ namespace LambdaCore
         , mAllocVBorder(mgr->mBlockWidth)
     {
         mLightmap->setFilters(Texture::FILTER_LINEAR, Texture::FILTER_LINEAR);
-        mLightmap->setWrap(Texture::WRAP_REPEAT, Texture::WRAP_REPEAT); // TODO: Makes no sense, map is always clamped by design
+        mLightmap->setWrap(Texture::WRAP_CLAMP_TO_EDGE, Texture::WRAP_CLAMP_TO_EDGE); // TODO: Makes no sense, map is always clamped by design
         mLightmap->setData(0, Texture::FORMAT_RGB, mgr->mBlockWidth, mgr->mBlockHeight, nullptr); // Preallocate texture data
     }
 

@@ -29,7 +29,7 @@ namespace LambdaCore
     private:
         struct Header
         {
-            char	        ID[4];						// File id
+            char	        ID[4];					// File id
             uint32_t	    Version;				// File version
             char	        Name[64];				// Model name
             uint32_t	    Length;					// File length
@@ -201,5 +201,11 @@ namespace LambdaCore
         };
 
     public:
+        Model(const Commons::IOStreamPtr stream);
+
+    private:
+        Header mHeader;
     };
+
+    typedef std::shared_ptr<Model> ModelPtr;
 }
